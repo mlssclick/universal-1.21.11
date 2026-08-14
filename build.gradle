@@ -1,0 +1,143 @@
+plugins {
+	id 'fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+
+version = '1.0.0'
+group = 'universalmod'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
+
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	def lombokJar = files("${System.properties['user.home']}/.gradle/caches/modules-2/files-2.1/org.projectlombok/lombok/1.18.38/57f8f5e02e92a30fd21b80cbd426a4172b5f8e29/lombok-1.18.38.jar")
+	compileOnly lombokJar
+	annotationProcessor lombokJar
+	
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	def figuraJar = fileTree(dir: "pl/libs", include: "figura-*.jar").files.sort().find { true }
+	if (figuraJar != null) {
+		modCompileOnly files(figuraJar)
+		modLocalRuntime files(figuraJar)
+
+		def figuraNestedNames = [
+				"luaj-core-3.0.8-figura.jar",
+				"luaj-jse-3.0.8-figura.jar",
+				"nv-websocket-client-2.14.jar"
+		]
+		def figuraNestedDir = project.layout.buildDirectory.dir("figura-nested").get().asFile
+		figuraNestedDir.mkdirs()
+		def figuraNestedJars = []
+		java.nio.file.FileSystems.newFileSystem(figuraJar.toPath(), Map.of()).withCloseable { fs ->
+			figuraNestedNames.each { name ->
+				def source = fs.getPath("META-INF/jars/" + name)
+				if (!java.nio.file.Files.exists(source)) {
+					logger.warn("Figura nested jar not found: ${name}")
+					return
+				}
+				def target = new File(figuraNestedDir, name)
+				if (!target.exists() || target.length() != java.nio.file.Files.size(source)) {
+					java.nio.file.Files.copy(source, target.toPath(),
+							java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+				}
+				figuraNestedJars << target
+			}
+		}
+		figuraNestedJars.each { modLocalRuntime files(it) }
+		logger.lifecycle("Figura on classpath: ${figuraJar.name} (+${figuraNestedJars.size()} nested libs)")
+	} else {
+		logger.warn("Figura jar missing in pl/libs/ - Figura Models will show unavailable state")
+	}
+}
+
+loom {
+	runs {
+		client {
+			programArgs "--username", "Baflllik_"
+		}
+	}
+}
+
+processResources {
+	def resourceProperties = [
+		version             : project.version,
+		minecraft_dependency: project.minecraft_version
+	]
+	inputs.properties(resourceProperties)
+	exclude("assets/universalmod/images/custommodels/bibizan.png")
+	exclude("assets/universalmod/images/custommodels/**")
+	exclude("assets/universalmod/geo/custommodels/**")
+	exclude("assets/universalmod/animations/custommodels/**")
+	exclude("assets/universalmod/geckolib/**")
+
+	filesMatching("fabric.mod.json") {
+		expand resourceProperties
+	}
+}
+
+sourceSets {
+	main {
+		java {
+			exclude "universalmod/api/module/impl/render/CustomModels.java"
+			exclude "universalmod/utils/render/custom/**"
+		}
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 21
+	it.options.encoding = "UTF-8"
+}
+
+tasks.withType(JavaExec).configureEach {
+	javaLauncher = javaToolchains.launcherFor {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+	doFirst {
+		def metadata = javaLauncher.get().metadata
+		if (metadata.vendor.toString().toLowerCase(Locale.ROOT).contains('jetbrains')) {
+			jvmArgs('-XX:+AllowEnhancedClassRedefinition')
+		}
+	}
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+	def projectName = project.name
+	inputs.property "projectName", projectName
+
+	from("LICENSE") {
+		rename { "${it}_$projectName"}
+	}
+}
+
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			from components.java
+		}
+	}
+
+	repositories {
+
+	}
+}

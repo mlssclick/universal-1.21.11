@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "directory",
+      "source": "item_replacer",
+      "prefix": "item_replacer/"
+    }
+  ]
+}
