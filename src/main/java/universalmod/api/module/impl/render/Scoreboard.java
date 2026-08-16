@@ -27,11 +27,7 @@ import universalmod.utils.render.animation.Easings;
 import universalmod.utils.render.animation.SmoothAnimation;
 import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.ui.Render2D;
-import universalmod.utils.render.ui.liquidglass.LiquidGlassBlurChannel;
 import universalmod.utils.render.ui.Render2DCoordinateSpace;
-import universalmod.utils.render.ui.blur.BlurAlgorithm;
-import universalmod.utils.render.ui.blur.BuiltBlur;
-import universalmod.utils.render.ui.darkpanel.BuiltDarkPanel;
 import universalmod.utils.render.ui.rectangle.rectdefault.BuiltRectangle;
 
 import java.awt.Color;
@@ -75,13 +71,11 @@ public final class Scoreboard extends Module {
     ));
     private final ModeSetting backgroundMode = register(new ModeSetting(
             "Background",
-            "Vanilla, custom, blur, Liquid Glass, Dark shader, or no background.",
-            "Vanilla",
+            "HUD, vanilla, custom, or no background.",
+            "HUD",
+            "HUD",
             "Vanilla",
             "Custom",
-            "Blur",
-            "Liquid Glass",
-            "Dark",
             "None"
     ));
     private final ColorSetting backgroundColor = register(new ColorSetting(
@@ -94,26 +88,6 @@ public final class Scoreboard extends Module {
             "Custom color and opacity for the title row.",
             new Color(0, 0, 0, 102)
     ));
-    private final NumberSetting blurRadius = register(new NumberSetting(
-            "Blur Radius",
-            "Strength of the scoreboard background blur shader.",
-            12.0D,
-            1.0D,
-            32.0D,
-            1.0D
-    ));
-    
-    private final NumberSetting liquidGlassOpacity = register(new NumberSetting(
-            "Glass Opacity", "Liquid Glass overlay opacity.", 20.0D, 0.0D, 100.0D, 1.0D));
-    private final NumberSetting liquidGlassStrength = register(new NumberSetting(
-            "Glass Strength", "Liquid Glass Fresnel power.", 25.0D, 0.0D, 100.0D, 1.0D));
-    private final NumberSetting liquidGlassDistortion = register(new NumberSetting(
-            "Glass Distortion", "Liquid Glass refraction strength.", 0.08D, -0.2D, 0.2D, 0.01D));
-    private final NumberSetting liquidGlassBlur = register(new NumberSetting(
-            "Glass Blur", "Kawase blur strength.", 0.5D, 0.0D, 8.0D, 0.25D));
-    private final NumberSetting liquidGlassRounding = register(new NumberSetting(
-            "Glass Rounding", "Liquid Glass rounding.", 7.0D, 0.0D, 8.0D, 1.0D));
-
     private final NumberSetting cornerRadius = register(new NumberSetting(
             "Corner Radius",
             "Rounds all four outer corners of the entire scoreboard background.",
@@ -162,15 +136,9 @@ public final class Scoreboard extends Module {
         drag.visible(false);
         renderedScale.set(scale.getFloat());
 
-        backgroundColor.visibleWhen(() -> backgroundMode.is("Custom") || backgroundMode.is("Blur"));
-        titleBackgroundColor.visibleWhen(() -> backgroundMode.is("Custom") || backgroundMode.is("Blur"));
-        blurRadius.visibleWhen(() -> backgroundMode.is("Blur"));
-        liquidGlassOpacity.visibleWhen(() -> backgroundMode.is("Liquid Glass"));
-        liquidGlassStrength.visibleWhen(() -> backgroundMode.is("Liquid Glass"));
-        liquidGlassDistortion.visibleWhen(() -> backgroundMode.is("Liquid Glass"));
-        liquidGlassBlur.visibleWhen(() -> backgroundMode.is("Liquid Glass"));
-        liquidGlassRounding.visibleWhen(() -> backgroundMode.is("Liquid Glass"));
-        cornerRadius.visibleWhen(() -> !backgroundMode.is("None") && !backgroundMode.is("Liquid Glass"));
+        backgroundColor.visibleWhen(() -> backgroundMode.is("Custom"));
+        titleBackgroundColor.visibleWhen(() -> backgroundMode.is("Custom"));
+        cornerRadius.visibleWhen(() -> backgroundMode.is("Vanilla") || backgroundMode.is("Custom"));
         titleColor.visibleWhen(() -> textColorMode.is("Custom"));
         lineColor.visibleWhen(() -> textColorMode.is("Custom"));
         numberColor.visibleWhen(() -> textColorMode.is("Custom") && showNumbers.getValue());
@@ -220,12 +188,6 @@ public final class Scoreboard extends Module {
                 backgroundMode,
                 backgroundColor,
                 titleBackgroundColor,
-                blurRadius,
-                liquidGlassOpacity,
-                liquidGlassStrength,
-                liquidGlassDistortion,
-                liquidGlassBlur,
-                liquidGlassRounding,
                 cornerRadius,
                 textColorMode,
                 titleColor,
@@ -248,11 +210,7 @@ public final class Scoreboard extends Module {
     }
 
     public void renderEditorPopupBackground(GuiGraphics graphics, float x, float y, float width, float height, float radius) {
-        if (backgroundMode.is("Liquid Glass")) {
-            drawLiquidGlassBackground(x, y, width, height, 1.0F);
-            return;
-        }
-        drawDarkBackground(graphics, x, y, width, height, radius);
+        Hud.renderHudBackground(x, y, width, height, radius, 8.0F, 1.0F, ColorUtil.rgba(0, 0, 0, 238));
     }
 
     public void render(GuiGraphics graphics, boolean editorLayer) {
@@ -543,55 +501,26 @@ public final class Scoreboard extends Module {
 
         float inverseCoordinateScale = 1.0F / Math.max(0.0001F, coordinateScale);
         float x = drag.x();
-        float y = drag.y();
+        float y = drag.y() - 3.0F;
         float width = layout.width() * userScale * inverseCoordinateScale;
-        float height = layout.height() * userScale * inverseCoordinateScale;
-        float titleHeight = layout.titleHeight() * userScale * inverseCoordinateScale;
+        float height = layout.height() * userScale * inverseCoordinateScale + 6.0F;
+        float titleHeight = layout.titleHeight() * userScale * inverseCoordinateScale + 3.0F;
         float radius = safeCornerRadius() * userScale * inverseCoordinateScale;
         boolean hasTitle = titleHeight > 0.0F && titleHeight < height;
 
-        if (backgroundMode.is("Liquid Glass")) {
-            drawLiquidGlassBackground(x, y, width, height, userScale * inverseCoordinateScale);
-            return;
-        }
-
-        if (backgroundMode.is("Dark")) {
-            drawDarkBackground(graphics, x, y, width, height, radius);
+        if (!backgroundMode.is("Custom") && !backgroundMode.is("Vanilla")) {
+            Hud.renderHudBackground(x, y, width, height, 5.0F, 8.0F, 1.0F, ColorUtil.rgba(0, 0, 0, 238));
             return;
         }
 
         int bodyColor;
         int headerColor;
-        if (backgroundMode.is("Custom") || backgroundMode.is("Blur")) {
+        if (backgroundMode.is("Custom")) {
             bodyColor = backgroundColor.getValue().getRGB();
             headerColor = titleBackgroundColor.getValue().getRGB();
         } else {
             bodyColor = client.options.getBackgroundColor(0.3F);
             headerColor = client.options.getBackgroundColor(0.4F);
-        }
-
-        if (backgroundMode.is("Blur")) {
-            BuiltBlur blur = new BuiltBlur(
-                    x,
-                    y,
-                    width,
-                    height,
-                    radius,
-                    1.0F,
-                    safeBlurRadius()
-            )
-                    .withAlgorithm(BlurAlgorithm.SCOREBOARD_SEPARABLE)
-                    .withColor(blurTint(backgroundColor.getValue()));
-
-            if (hasTitle) {
-                blur = blur.withVerticalColorSplit(
-                        titleHeight,
-                        blurTint(titleBackgroundColor.getValue()),
-                        blurTint(backgroundColor.getValue())
-                );
-            }
-            blur.render(graphics);
-            return;
         }
 
         BuiltRectangle rectangle = new BuiltRectangle(x, y, width, height, radius, bodyColor);
@@ -601,56 +530,13 @@ public final class Scoreboard extends Module {
         rectangle.render(graphics);
     }
 
-    private void drawDarkBackground(GuiGraphics graphics, float x, float y, float width, float height, float radius) {
-
-        new BuiltBlur(x, y, width, height, radius, 1.0F, 2.0F)
-                .withAlgorithm(BlurAlgorithm.SCOREBOARD_SEPARABLE)
-                .withColor(ColorUtil.rgba(18, 18, 20, 86))
-                .render(graphics);
-        new BuiltDarkPanel(x, y, width, height, radius, 1.0F).render(graphics);
-    }
-
-    private void drawLiquidGlassBackground(float x, float y, float width, float height, float scaleFactor) {
-        float squirt = 7.0F;
-        float rounding = clamp(liquidGlassRounding.getFloat(), 0.0F, 8.0F) * Math.max(scaleFactor, 0.0001F);
-
-        float liquidRadius = rounding * squirt / 2.0F;
-        float strength = clamp(liquidGlassStrength.getFloat(), 0.0F, 100.0F);
-        float distortion = clamp(liquidGlassDistortion.getFloat(), -0.2F, 0.2F);
-        float blur = clamp(liquidGlassBlur.getFloat(), 0.0F, 8.0F);
-        int white = ColorUtil.rgba(255, 255, 255, 255);
-
-        Render2D.liquidGlass(
-                x, y, width, height, liquidRadius, white, 1.0F,
-                strength + (Math.abs(height - 240.0F) < 0.001F ? 2.0F : 1.0F),
-                0xFFFFFFFF, 1.0F, true, 0.0F, distortion, squirt, blur,
-                LiquidGlassBlurChannel.SCOREBOARD
-        );
-
-        float overlay = clamp(liquidGlassOpacity.getFloat() / 100.0F, 0.0F, 1.0F);
-        Render2D.squircle(
-                x, y, width, height, rounding, squirt,
-                ColorUtil.rgba(12, 12, 12, Math.round(255.0F * overlay))
-        );
-    }
-
     private static float clamp(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
-    }
-    private float safeBlurRadius() {
-        float value = blurRadius.getFloat();
-        return Float.isFinite(value) ? Math.max(1.0F, Math.min(32.0F, value)) : 12.0F;
     }
 
     private float safeCornerRadius() {
         float value = cornerRadius.getFloat();
         return Float.isFinite(value) ? Math.max(0.0F, Math.min(12.0F, value)) : 0.0F;
-    }
-
-    private static int blurTint(Color color) {
-        Color safe = color == null ? new Color(0, 0, 0, 77) : color;
-        int alpha = Math.max(1, safe.getAlpha());
-        return (alpha << 24) | (safe.getRed() << 16) | (safe.getGreen() << 8) | safe.getBlue();
     }
 
     private Component displayComponent(Component component) {

@@ -54,6 +54,8 @@ public final class WaypointMessageParser {
                 || message.contains("через")
                 || message.contains("команд")
                 || message.contains("не существует")
+                || message.contains("\u0441\u0435\u0439\u0447\u0430\u0441 \u043e\u0442\u043a\u0440\u044b\u0442\u0430 \u0438 \u0441\u043a\u043e\u0440\u043e \u0437\u0430\u043a\u0440\u043e\u0435\u0442\u0441\u044f")
+                || message.contains("\u0441\u0435\u0439\u0447\u0430\u0441 \u043e\u0442\u043a\u0440\u044b\u0442\u043e \u0438 \u0441\u043a\u043e\u0440\u043e \u0437\u0430\u043a\u0440\u043e\u0435\u0442\u0441\u044f")
                 || message.contains("unknown command");
     }
 

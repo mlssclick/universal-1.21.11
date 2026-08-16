@@ -1,22 +1,15 @@
 package universalmod.utils.render.ui;
 
-import universalmod.utils.render.ui.blur.BlurBuilder;
 import universalmod.utils.render.ui.blur.BlurFramebuffer;
 import universalmod.utils.render.ui.blur.BuiltBlur;
-import universalmod.utils.render.ui.darkpanel.BuiltDarkPanel;
-import universalmod.utils.render.ui.darkpanel.DarkPanelRenderer;
 import universalmod.utils.render.ui.effecticon.BuiltEffectIcon;
 import universalmod.utils.render.ui.effecticon.EffectIconRenderer;
 import universalmod.utils.render.ui.emotionwheel.EmotionWheelArcRenderer;
 import universalmod.utils.render.ui.font.FontType;
 import universalmod.utils.render.ui.glass.BuiltGlass;
 import universalmod.utils.render.ui.glass.GlassRenderer;
-import universalmod.utils.render.ui.liquidglass.BuiltLiquidGlass;
-import universalmod.utils.render.ui.liquidglass.LiquidGlassBlurChannel;
-import universalmod.utils.render.ui.liquidglass.LiquidGlassFramebuffer;
-import universalmod.utils.render.ui.liquidglass.LiquidGlassRenderer;
-import universalmod.utils.render.ui.liquidglass.BuiltSquircle;
-import universalmod.utils.render.ui.liquidglass.SquircleRenderer;
+import universalmod.utils.render.ui.hudchrome.BuiltHudChrome;
+import universalmod.utils.render.ui.hudchrome.HudChromeRenderer;
 import universalmod.utils.render.ui.image.BuiltImage;
 import universalmod.utils.render.ui.image.ImageRenderer;
 import universalmod.utils.render.ui.msdf.MsdfIconRenderer;
@@ -58,9 +51,6 @@ public final class Render2D {
     private static GuiGraphics currentGraphics;
 
     private Render2D() {
-    }
-
-    public static void init() {
     }
 
     public static int getFixedScaledWidth() {
@@ -154,9 +144,7 @@ public final class Render2D {
         currentGraphics = graphics;
         blur().beginFrame(graphics);
         glass().beginFrame(graphics);
-        liquidGlassRenderer().beginFrame(graphics);
-        squircle().beginFrame(graphics);
-        darkPanel().beginFrame(graphics);
+        hudChrome().beginFrame(graphics);
         glassOutline().beginFrame(graphics);
         rectangle().beginFrame(graphics);
         outline().beginFrame(graphics);
@@ -168,9 +156,7 @@ public final class Render2D {
     public static void flush() {
         blur().flush();
         glass().flush();
-        liquidGlassRenderer().flush();
-        squircle().flush();
-        darkPanel().flush();
+        hudChrome().flush();
         glassOutline().flush();
         rectangle().flush();
         outline().flush();
@@ -184,23 +170,16 @@ public final class Render2D {
         return currentGraphics;
     }
 
-    public static void darkPanel(float x, float y, float width, float height, float radius, float alpha) {
-        darkPanel(x, y, width, height, radius, alpha, 0.70f, false);
-    }
-
-    public static void darkPanel(
+    /**
+     * Dark, softly lit chrome layer used on top of the blurred world in the HUD.
+     * The backdrop blur itself is requested separately so both passes stay batched.
+     */
+    public static void hudChrome(
             float x, float y, float width, float height, float radius,
-            float alpha, float gradientStrength, boolean shadow
-    ) {
-        darkPanel(x, y, width, height, radius, alpha, gradientStrength, shadow, 0xFF0D0F12);
-    }
-
-    public static void darkPanel(
-            float x, float y, float width, float height, float radius,
-            float alpha, float gradientStrength, boolean shadow, int baseColor
+            float alpha, float smoothness, float darkness
     ) {
         imageBarrier();
-        darkPanel().enqueue(new BuiltDarkPanel(x, y, width, height, radius, alpha, gradientStrength, shadow, baseColor));
+        hudChrome().enqueue(new BuiltHudChrome(x, y, width, height, radius, alpha, smoothness, darkness));
     }
 
     public static void blur(float x, float y, float width, float height, float radius) {
@@ -243,10 +222,6 @@ public final class Render2D {
     public static void blur(BuiltBlur blur) {
         imageBarrier();
         Render2D.blur().enqueue(blur);
-    }
-
-    public static BlurBuilder blurBuilder() {
-        return new BlurBuilder();
     }
 
     public static void glass(
@@ -372,56 +347,6 @@ public final class Render2D {
     public static void glass(BuiltGlass glass) {
         imageBarrier();
         Render2D.glass().enqueue(glass);
-    }
-
-    public static void liquidGlass(
-            float x, float y, float width, float height,
-            float radiusTopLeft, float radiusTopRight, float radiusBottomRight, float radiusBottomLeft,
-            int color, float globalAlpha, float fresnelPower, int fresnelColor, float baseAlpha,
-            boolean fresnelInvert, float fresnelMix, float distortStrength, float squirt, float blurStrength,
-            LiquidGlassBlurChannel blurChannel, float z
-    ) {
-        imageBarrier();
-        liquidGlassRenderer().enqueue(new BuiltLiquidGlass(
-                x, y, width, height, radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft,
-                color, globalAlpha, fresnelPower, fresnelColor, baseAlpha, fresnelInvert, fresnelMix,
-                distortStrength, squirt, blurStrength, blurChannel, z
-        ));
-    }
-
-    public static void liquidGlass(
-            float x, float y, float width, float height,
-            float radiusTopLeft, float radiusTopRight, float radiusBottomRight, float radiusBottomLeft,
-            int color, float globalAlpha, float fresnelPower, int fresnelColor, float baseAlpha,
-            boolean fresnelInvert, float fresnelMix, float distortStrength, float squirt, float blurStrength, float z
-    ) {
-        liquidGlass(x, y, width, height, radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft,
-                color, globalAlpha, fresnelPower, fresnelColor, baseAlpha, fresnelInvert, fresnelMix, distortStrength,
-                squirt, blurStrength, LiquidGlassBlurChannel.THEME, z);
-    }
-
-    public static void liquidGlass(
-            float x, float y, float width, float height, float radius, int color, float globalAlpha,
-            float fresnelPower, int fresnelColor, float baseAlpha, boolean fresnelInvert, float fresnelMix,
-            float distortStrength, float squirt, float blurStrength
-    ) {
-        liquidGlass(x, y, width, height, radius, radius, radius, radius, color, globalAlpha,
-                fresnelPower, fresnelColor, baseAlpha, fresnelInvert, fresnelMix, distortStrength, squirt, blurStrength, 0.0f);
-    }
-
-    public static void liquidGlass(
-            float x, float y, float width, float height, float radius, int color, float globalAlpha,
-            float fresnelPower, int fresnelColor, float baseAlpha, boolean fresnelInvert, float fresnelMix,
-            float distortStrength, float squirt, float blurStrength, LiquidGlassBlurChannel blurChannel
-    ) {
-        liquidGlass(x, y, width, height, radius, radius, radius, radius, color, globalAlpha,
-                fresnelPower, fresnelColor, baseAlpha, fresnelInvert, fresnelMix, distortStrength, squirt, blurStrength,
-                blurChannel, 0.0f);
-    }
-
-    public static void squircle(float x, float y, float width, float height, float radius, float squirt, int color) {
-        imageBarrier();
-        squircle().enqueue(new BuiltSquircle(x, y, width, height, radius, radius, radius, radius, squirt, color, 0.0f));
     }
 
     public static void glassOutline(
@@ -555,30 +480,6 @@ public final class Render2D {
     public static void glassOutline(BuiltGlassOutline outline) {
         imageBarrier();
         Render2D.glassOutline().enqueue(outline);
-    }
-
-    public static void liquidGlassOutline(float x, float y, float width, float height, float squirt, float power, float radius, float thickness, int color) {
-        glassOutline(
-                x,
-                y,
-                width,
-                height,
-                radius * squirt / 2.0f,
-                radius * squirt / 2.0f,
-                radius * squirt / 2.0f,
-                radius * squirt / 2.0f,
-                thickness,
-                color,
-                ((color >>> 24) & 0xFF) / 255.0f,
-                height == 240.0f ? 100.0f : 50.0f,
-                color | 0xFF000000,
-                1.0f,
-                true,
-                0.0f,
-                power,
-                squirt,
-                0.0f
-        );
     }
 
     public static void rect(float x, float y, float width, float height, int color) {
@@ -1096,10 +997,7 @@ public final class Render2D {
 
         closeSafely("blur framebuffer", BlurFramebuffer::closeInstance);
         closeSafely("glass renderer", GlassRenderer::closeInstance);
-        closeSafely("liquid glass renderer", LiquidGlassRenderer::closeInstance);
-        closeSafely("squircle renderer", SquircleRenderer::closeInstance);
-        closeSafely("dark panel renderer", DarkPanelRenderer::closeInstance);
-        closeSafely("liquid glass framebuffer", LiquidGlassFramebuffer::closeInstance);
+        closeSafely("HUD chrome renderer", HudChromeRenderer::closeInstance);
         closeSafely("glass outline renderer", GlassOutlineRenderer::closeInstance);
         closeSafely("rectangle renderer", DefaultRectangleRenderer::closeInstance);
         closeSafely("outline renderer", DefaultOutlineRenderer::closeInstance);
@@ -1126,17 +1024,12 @@ public final class Render2D {
         return GlassRenderer.getInstance();
     }
 
-    private static LiquidGlassRenderer liquidGlassRenderer() {
-        return LiquidGlassRenderer.getInstance();
+    private static HudChromeRenderer hudChrome() {
+        return HudChromeRenderer.getInstance();
     }
 
-    private static SquircleRenderer squircle() {
-        return SquircleRenderer.getInstance();
-    }
 
-    private static DarkPanelRenderer darkPanel() {
-        return DarkPanelRenderer.getInstance();
-    }
+
 
     private static GlassOutlineRenderer glassOutline() {
         return GlassOutlineRenderer.getInstance();

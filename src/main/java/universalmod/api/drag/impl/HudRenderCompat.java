@@ -12,8 +12,8 @@ final class HudRenderCompat {
         Hud.renderHudBackground(x, y, width, height, radius, blurRadius, smoothness, color);
     }
 
-    static void splitHeader(float x, float y, float width, float height, float radius, float blurRadius, float smoothness, int color) {
-        Hud.renderSplitHudHeader(x, y, width, height, radius, blurRadius, smoothness, color);
+    static void header(float x, float y, float width, float height, float radius, float blurRadius, float smoothness, int color) {
+        Hud.renderHudHeader(x, y, width, height, radius, blurRadius, smoothness, color);
     }
 
     static void background(BuiltBlur blur) {

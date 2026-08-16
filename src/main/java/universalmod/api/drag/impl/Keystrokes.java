@@ -8,7 +8,6 @@ import universalmod.utils.render.animation.SmoothAnimation;
 import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.ui.Render2D;
 import universalmod.utils.render.ui.font.FontType;
-import universalmod.utils.theme.ThemeColors;
 
 import java.awt.Color;
 
@@ -24,8 +23,6 @@ public final class Keystrokes extends HudPanel {
     private static final float KEY_TEXT_SIZE = 8.2F;
     private static final float MOUSE_TEXT_SIZE = 7.0F;
     private static final float PRESS_ANIM = 0.18F;
-    private static final float LIQUID_SQUIRT = 7.0F;
-    private static final float SPACE_BAR_SQUIRT = 2.0F;
 
     private final Hud hud;
     private final SmoothAnimation w = animation();
@@ -35,7 +32,6 @@ public final class Keystrokes extends HudPanel {
     private final SmoothAnimation lmb = animation();
     private final SmoothAnimation rmb = animation();
     private final SmoothAnimation space = animation();
-    private float liquidGlassProgress;
 
     public Keystrokes(Hud hud) {
         super("keystrokes", "Keystrokes", 12.0F, 145.0F, TOTAL_WIDTH, fullHeight(true, true, true));
@@ -64,8 +60,6 @@ public final class Keystrokes extends HudPanel {
         update(lmb, mouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT));
         update(rmb, mouseDown(GLFW.GLFW_MOUSE_BUTTON_RIGHT));
         update(space, isDown(mc.options.keyJump));
-        liquidGlassProgress = ThemeColors.hudLiquidGlassProgress();
-
         float height = fullHeight(showKeys, showMouse, showSpace);
         size(TOTAL_WIDTH, height);
 
@@ -109,50 +103,26 @@ public final class Keystrokes extends HudPanel {
         Color letters = hud.keystrokesLetterColor();
         float pressedAlpha = hud.keystrokesPressedAlpha();
         float p = clamp01(progress);
-        boolean liquid = ThemeColors.isHudLiquidGlassDesignEnabled();
-        boolean dark = ThemeColors.isHudDarkDesignEnabled();
-
-        if (liquid) {
-            renderLiquidButton(x, y, width, height, alpha, p);
-        } else if (dark) {
-            renderOpaqueDarkButton(x, y, width, height);
-            renderCenterFill(x, y, width, height, p, alpha, pressedAlpha, pressed);
-        } else {
-            int baseColor = ColorUtil.rgba(normal.getRed(), normal.getGreen(), normal.getBlue(),
-                    Math.round(normal.getAlpha() * alpha));
-            HudRenderCompat.background(x, y, width, height, RADIUS, BLUR_RADIUS, BLUR_SMOOTHNESS, baseColor);
-            renderCenterFill(x, y, width, height, p, alpha, pressedAlpha, pressed);
-        }
+        int baseColor = ColorUtil.rgba(normal.getRed(), normal.getGreen(), normal.getBlue(),
+                Math.round(normal.getAlpha() * alpha));
+        HudRenderCompat.background(x, y, width, height, RADIUS, BLUR_RADIUS, BLUR_SMOOTHNESS, baseColor);
+        Render2D.rect(x, y, width, height, RADIUS, ColorUtil.rgba(
+                normal.getRed(), normal.getGreen(), normal.getBlue(),
+                Math.round(normal.getAlpha() * alpha * 0.42F)
+        ));
+        renderCenterFill(x, y, width, height, p, alpha, pressedAlpha, pressed);
 
         if (spaceButton) {
             float lineWidth = Math.min(width - 14.0F, 40.0F);
             float lineHeight = 2.1F;
             float lineX = x + (width - lineWidth) * 0.5F;
             float lineY = y + (height - lineHeight) * 0.5F;
-            int red = liquid ? mix(255, pressed.getRed(), p) : 255;
-            int green = liquid ? mix(255, pressed.getGreen(), p) : 255;
-            int blue = liquid ? mix(255, pressed.getBlue(), p) : 255;
-            float linePressedAlpha = liquid ? lerp(1.0F, pressedAlpha, p) : 1.0F;
-            int lineColor = ColorUtil.rgba(red, green, blue, Math.round(250.0F * alpha * linePressedAlpha));
-            Render2D.squircle(
-                    lineX, lineY, lineWidth, lineHeight,
-                    lineHeight * 0.5F, SPACE_BAR_SQUIRT, lineColor
-            );
+            int lineColor = ColorUtil.rgba(255, 255, 255, Math.round(245.0F * alpha));
+            Render2D.rect(lineX, lineY, lineWidth, lineHeight, lineHeight * 0.5F, lineColor);
             return;
         }
 
-        int textColor;
-        if (liquid) {
-            int red = mix(letters.getRed(), pressed.getRed(), p);
-            int green = mix(letters.getGreen(), pressed.getGreen(), p);
-            int blue = mix(letters.getBlue(), pressed.getBlue(), p);
-            float baseLetterAlpha = letters.getAlpha() / 255.0F;
-            float textAlpha = lerp(baseLetterAlpha, pressedAlpha, p);
-            textColor = ColorUtil.rgba(red, green, blue, Math.round(255.0F * alpha * textAlpha));
-        } else {
-            textColor = ColorUtil.rgba(letters.getRed(), letters.getGreen(), letters.getBlue(),
-                    Math.round(letters.getAlpha() * alpha));
-        }
+        int textColor = ColorUtil.rgba(255, 255, 255, Math.round(letters.getAlpha() * alpha));
 
         float textWidth = Render2D.textWidth(FontType.BOLD, label, textSize);
         float textHeight = Render2D.textHeight(FontType.BOLD, label, textSize);
@@ -184,51 +154,6 @@ public final class Keystrokes extends HudPanel {
         } finally {
             Render2D.popScissor(Render2D.currentGraphics());
         }
-    }
-
-    private void renderOpaqueDarkButton(float x, float y, float width, float height) {
-        int dark = ThemeColors.darkColor();
-        Render2D.rect(x, y, width, height, RADIUS,
-                ColorUtil.rgba(ColorUtil.getRed(dark), ColorUtil.getGreen(dark), ColorUtil.getBlue(dark), 255));
-        Render2D.darkPanel(x, y, width, height, RADIUS, 1.0F, ThemeColors.darkGradientStrength(), false, dark);
-    }
-
-    private void renderLiquidButton(float x, float y, float width, float height, float alpha, float pressProgress) {
-        float glassProgress = clamp01(liquidGlassProgress);
-        if (glassProgress <= 0.001F) {
-            return;
-        }
-
-        float baseStrength = ThemeColors.glassStrength();
-        float baseDistortion = ThemeColors.glassDistortion();
-        boolean alreadyPressedTarget = Math.abs(baseStrength - 2.0F) <= 0.001F && Math.abs(baseDistortion - 0.20F) <= 0.001F;
-        float pressedStrength = alreadyPressedTarget ? 98.0F : 2.0F;
-        float pressedDistortion = alreadyPressedTarget ? 0.0F : 0.20F;
-        float strength = lerp(baseStrength, pressedStrength, pressProgress);
-        float distortion = lerp(baseDistortion, pressedDistortion, pressProgress);
-
-        float minimalism = 1.0F - glassProgress;
-        float gx = x - 5.0F * minimalism;
-        float gy = y - 5.0F * minimalism;
-        float gw = width + 10.0F * minimalism;
-        float gh = height + 10.0F * minimalism;
-        float radius = RADIUS * LIQUID_SQUIRT / 2.0F;
-        int white = ColorUtil.rgba(255, 255, 255, Math.round(255.0F * alpha * glassProgress));
-        float globalAlpha = alpha * glassProgress * glassProgress;
-
-        Render2D.liquidGlass(
-                gx, gy, gw, gh, radius,
-                white, globalAlpha, strength * glassProgress,
-                0xFFFFFFFF, 1.0F, true, 0.0F,
-                distortion * glassProgress, LIQUID_SQUIRT, ThemeColors.glassBlur()
-        );
-
-        float glassOverlay = clamp01(ThemeColors.glassOpacity() / 100.0F);
-        float fillAlpha = 0.8F - (0.8F - glassOverlay) * glassProgress;
-        Render2D.squircle(
-                x, y, width, height, radius, LIQUID_SQUIRT,
-                ColorUtil.rgba(12, 12, 12, Math.round(255.0F * fillAlpha * alpha))
-        );
     }
 
     private void update(SmoothAnimation animation, boolean down) {
@@ -274,14 +199,6 @@ public final class Keystrokes extends HudPanel {
     private static float easedFill(float progress) {
         float p = clamp01(progress);
         return 1.0F - (1.0F - p) * (1.0F - p) * (1.0F - p);
-    }
-
-    private static int mix(int from, int to, float progress) {
-        return Math.round(from + (to - from) * clamp01(progress));
-    }
-
-    private static float lerp(float from, float to, float progress) {
-        return from + (to - from) * clamp01(progress);
     }
 
     private static float clamp01(float value) {

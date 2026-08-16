@@ -6,6 +6,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import universalmod.api.module.impl.render.Hud;
 import universalmod.utils.cooldown.CooldownStateStorage;
 import universalmod.utils.cooldown.HolyWorldHealingCooldown;
 import universalmod.utils.render.animation.Easings;
@@ -15,7 +16,7 @@ import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.item.RenderItem;
 import universalmod.utils.render.item.RenderItemOptions;
 import universalmod.utils.render.ui.Render2D;
-import universalmod.utils.theme.ThemeColors;
+import universalmod.utils.render.ui.font.FontType;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,25 +25,27 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.awt.Color;
 
 public final class Cooldowns extends HudPanel {
-    private static final String HEADER_ICON_TEXTURE = "universalmod:textures/hud/header_cooldowns_clock.png";
     private static final float HEADER_HEIGHT = 18.0F;
-    private static final float HEADER_GAP = 5.0F;
-    private static final float BODY_PADDING_Y = 5.0F;
-    private static final float BODY_PADDING_X = 6.0F;
-    private static final float ROW_HEIGHT = 10.0F;
+    private static final float HEADER_GAP = 3.0F;
+    private static final float BODY_PADDING_Y = 5.5F;
+    private static final float BODY_PADDING_X = 7.0F;
+    private static final float ROW_HEIGHT = 12.0F;
     private static final float ROW_GAP = 2.0F;
     private static final float ROW_STEP = ROW_HEIGHT + ROW_GAP;
-    private static final float ITEM_SIZE = 8.0F;
-    private static final float ITEM_TEXT_GAP = 5.0F;
-    private static final float NAME_TIMER_GAP = 10.0F;
-    private static final float HEADER_ICON_EDGE_PADDING = 4.0F;
-    private static final float HEADER_TEXT_GAP = 4.0F;
-    private static final float HEADER_ICON_SIZE = 8.0F;
+    private static final float ICON_SIZE = 7.0F;
+    private static final float ICON_SEPARATOR_GAP = 2.4F;
+    private static final float SEPARATOR_WIDTH = 0.6F;
+    private static final float SEPARATOR_TEXT_GAP = 3.6F;
+    private static final float NAME_TIMER_GAP = 7.0F;
+    private static final float TIMER_BOX_HEIGHT = 8.6F;
+    private static final float TEXT_SIZE = 6.6F;
+    private static final float HEADER_TEXT_SIZE = 7.7F;
     private static final float PANEL_ANIM = 0.24F;
     private static final float ROW_ANIM = 0.22F;
-    private static final float PANEL_WIDTH = 90.0F;
+    private static final float PANEL_WIDTH = 94.0F;
     private static final float PANEL_HEIGHT = BODY_PADDING_Y * 2.0F + ROW_HEIGHT;
     private static final float BODY_BLUR_RADIUS = 4.0F;
     private static final float BODY_BLUR_SMOOTHNESS = 0.55F;
@@ -75,10 +78,7 @@ public final class Cooldowns extends HudPanel {
         boolean preview = active.isEmpty() && editPreview();
         boolean targetVisible = !active.isEmpty() || preview;
 
-        float headerExpansion = ThemeColors.isHudWithoutName()
-                ? 0.0F
-                : HEADER_HEIGHT + (ThemeColors.isHudSplit() ? HEADER_GAP : 0.0F);
-        hitExpansion(0.0F, headerExpansion, 0.0F, 0.0F);
+        hitExpansion(0.0F, HEADER_HEIGHT + HEADER_GAP, 0.0F, 0.0F);
         panelAnimation.update();
         panelAnimation.run(targetVisible ? 1.0F : 0.0F, PANEL_ANIM, targetVisible ? Easings.EXPO_OUT : Easings.EXPO_IN, true);
 
@@ -90,7 +90,7 @@ public final class Cooldowns extends HudPanel {
 
         int targetRows = 0;
         if (preview) {
-            RowEntry entry = row("__preview", PREVIEW_STACK, "Sugar", "**:**", 6.0F, 0.0F);
+            RowEntry entry = row("__preview", PREVIEW_STACK, "Sugar", "**:**", TEXT_SIZE, 0.0F);
             entry.active = true;
             entry.alpha.run(1.0F, ROW_ANIM, Easings.EXPO_OUT, true);
             entry.y.run(0.0F, ROW_ANIM, Easings.EXPO_OUT, true);
@@ -98,7 +98,7 @@ public final class Cooldowns extends HudPanel {
         } else {
             for (CooldownInfo info : active) {
                 float targetY = targetRows * ROW_STEP;
-                RowEntry entry = row(info.rowKey(), info.stack, info.displayName, info.remainingText(), 6.0F, targetY);
+                RowEntry entry = row(info.rowKey(), info.stack, info.displayName, info.remainingText(), TEXT_SIZE, targetY);
                 entry.active = true;
                 entry.alpha.run(1.0F, ROW_ANIM, Easings.EXPO_OUT, true);
                 entry.y.run(targetY, ROW_ANIM, Easings.EXPO_OUT, true);
@@ -124,9 +124,9 @@ public final class Cooldowns extends HudPanel {
         for (RowEntry entry : rowEntries) {
             if (entry.alpha.get() > 0.01F || entry.active) {
                 width = Math.max(width,
-                        BODY_PADDING_X + ITEM_SIZE + ITEM_TEXT_GAP
-                                + Render2D.textWidth(TEXT_FONT, entry.name, 6.0F)
-                                + NAME_TIMER_GAP + timerWidth(entry.time, entry.timeSize) + BODY_PADDING_X);
+                        BODY_PADDING_X + ICON_SIZE + ICON_SEPARATOR_GAP + SEPARATOR_WIDTH + SEPARATOR_TEXT_GAP
+                                + Render2D.textWidth(TEXT_FONT, entry.name, TEXT_SIZE)
+                                + NAME_TIMER_GAP + timerBoxWidth(entry.time, entry.timeSize) + BODY_PADDING_X);
             }
         }
         size(width, bodyHeight(Math.max(1, targetRows)));
@@ -148,67 +148,40 @@ public final class Cooldowns extends HudPanel {
     private void renderCooldowns(CooldownsState state) {
         float alpha = state.alpha;
         String headerText = "Cooldowns";
-        float headerTextSize = 9.0F;
-        int headerTextColor = hudTextColor(Math.round(255.0F * alpha));
+        float headerTextSize = HEADER_TEXT_SIZE;
+        int headerTextColor = ColorUtil.rgba(255, 255, 255, Math.round(255.0F * alpha));
         int backgroundColor = ColorUtil.rgba(0, 0, 0, Math.round(255.0F * alpha));
-        boolean withoutName = ThemeColors.isHudWithoutName();
-        boolean split = ThemeColors.isHudSplit();
-
-        if (withoutName) {
-            HudRenderCompat.background(state.x, state.y, state.width, state.height, 4.0F,
-                    BODY_BLUR_RADIUS, BODY_BLUR_SMOOTHNESS, backgroundColor);
-        } else if (split) {
-            boolean showIcon = ThemeColors.showSplitIcon();
-            float headerTextWidth = Render2D.textWidth(TEXT_FONT, headerText, headerTextSize);
-            float headerPadding = 6.0F;
-            float iconPart = showIcon ? HEADER_ICON_SIZE + HEADER_TEXT_GAP : 0.0F;
-            float headerWidth = headerTextWidth + iconPart + headerPadding * 2.0F;
-            float headerX = state.x + (state.width - headerWidth) * 0.5F;
-            float headerY = state.y - HEADER_HEIGHT - HEADER_GAP;
-            float headerTextY = headerY + (HEADER_HEIGHT - Render2D.textHeight(TEXT_FONT, headerText, headerTextSize)) * 0.5F;
-            float headerRounding = ThemeColors.splitHeaderRounding();
-            float textX = headerX + headerPadding + iconPart;
-
-            HudRenderCompat.splitHeader(headerX, headerY, headerWidth, HEADER_HEIGHT, headerRounding,
-                    BODY_BLUR_RADIUS, BODY_BLUR_SMOOTHNESS, backgroundColor);
-            HudRenderCompat.background(state.x, state.y, state.width, state.height, 4.0F,
-                    BODY_BLUR_RADIUS, BODY_BLUR_SMOOTHNESS, backgroundColor);
-            if (showIcon && alpha > 0.001F) {
-                float iconX = headerX + headerPadding;
-                float iconY = headerTextY + (Render2D.textHeight(TEXT_FONT, headerText, headerTextSize) - HEADER_ICON_SIZE) * 0.5F;
-                Render2D.image(HEADER_ICON_TEXTURE, iconX, iconY, HEADER_ICON_SIZE, HEADER_ICON_SIZE, 0.0F, headerTextColor);
-            }
-            Render2D.text(TEXT_FONT, headerText, textX, headerTextY, headerTextSize, headerTextColor);
-        } else {
-            float headerY = state.y - HEADER_HEIGHT;
-            float headerTextY = headerY + (HEADER_HEIGHT - Render2D.textHeight(TEXT_FONT, headerText, headerTextSize)) * 0.5F;
-            float textX = state.x + HEADER_ICON_EDGE_PADDING;
-            float iconX = state.x + state.width - HEADER_ICON_EDGE_PADDING - HEADER_ICON_SIZE;
-            float iconY = headerTextY + (Render2D.textHeight(TEXT_FONT, headerText, headerTextSize) - HEADER_ICON_SIZE) * 0.5F;
-            HudRenderCompat.background(state.x, headerY, state.width, HEADER_HEIGHT + state.height, 4.0F,
-                    BODY_BLUR_RADIUS, BODY_BLUR_SMOOTHNESS, backgroundColor);
-            if (((headerTextColor >>> 24) & 0xFF) > 0) {
-                Render2D.image(HEADER_ICON_TEXTURE, iconX, iconY, HEADER_ICON_SIZE, HEADER_ICON_SIZE, 0.0F, headerTextColor);
-            }
-            Render2D.text(TEXT_FONT, headerText, textX, headerTextY, headerTextSize, headerTextColor);
-        }
+        float headerY = state.y - HEADER_HEIGHT - HEADER_GAP;
+        float titleY = headerY + (HEADER_HEIGHT - Render2D.textHeight(TEXT_FONT, headerText, headerTextSize)) * 0.5F;
+        HudRenderCompat.background(state.x, headerY, state.width, HEADER_HEIGHT, 5.0F,
+                BODY_BLUR_RADIUS, BODY_BLUR_SMOOTHNESS, backgroundColor);
+        HudRenderCompat.background(state.x, state.y, state.width, state.height, 5.0F,
+                BODY_BLUR_RADIUS, BODY_BLUR_SMOOTHNESS, backgroundColor);
+        float markerHeight = 6.0F;
+        float markerY = headerY + (HEADER_HEIGHT - markerHeight) * 0.5F;
+        Render2D.rect(state.x + 6.0F, markerY, 1.4F, markerHeight, 0.7F, accentColor(214.0F * alpha));
+        Render2D.text(TEXT_FONT, headerText, state.x + 11.0F, titleY, headerTextSize, headerTextColor);
+        renderHeaderIcon("D", state.x + state.width - 7.0F, headerY, alpha);
 
         for (RowState row : state.rows) {
             float rowAlpha = alpha * row.alpha;
             float rowCenterY = state.y + BODY_PADDING_Y + ROW_HEIGHT * 0.5F + row.offset;
-            float itemX = state.x + BODY_PADDING_X;
-            float itemY = rowCenterY - ITEM_SIZE * 0.5F;
-            float textY = rowCenterY - 3.15F;
-            float nameX = itemX + ITEM_SIZE + ITEM_TEXT_GAP;
+            float iconX = state.x + BODY_PADDING_X;
+            float iconY = rowCenterY - ICON_SIZE * 0.5F;
+            float separatorX = iconX + ICON_SIZE + ICON_SEPARATOR_GAP;
+            float nameX = separatorX + SEPARATOR_WIDTH + SEPARATOR_TEXT_GAP;
             float timerRightX = state.x + state.width - BODY_PADDING_X;
-            float timerLeftX = timerRightX - timerWidth(row.time, row.timeSize);
-            String visibleName = trimToWidth(row.name, TEXT_FONT, 6.0F,
+            float timerLeftX = timerRightX - timerBoxWidth(row.time, row.timeSize);
+            String visibleName = trimToWidth(row.name, TEXT_FONT, TEXT_SIZE,
                     Math.max(8.0F, timerLeftX - NAME_TIMER_GAP - nameX));
+            float textY = rowCenterY - Render2D.textHeight(TEXT_FONT, visibleName, TEXT_SIZE) * 0.5F;
 
-            RenderItem.item(row.stack, itemX, itemY, ITEM_SIZE, RenderItemOptions.noDecorations(rowAlpha));
-            Render2D.text(TEXT_FONT, visibleName, nameX, textY, 6.0F,
-                    hudTextColor(Math.round(245.0F * rowAlpha)));
-            renderTimer(row.time, timerRightX, textY, row.timeSize, rowAlpha, row.secondsAnimation);
+            renderCooldownIcon(row.stack, iconX, iconY, rowAlpha);
+            Render2D.rect(separatorX, rowCenterY - 2.3F, SEPARATOR_WIDTH, 4.6F, 0.3F,
+                    ColorUtil.rgba(255, 255, 255, Math.round(40.0F * rowAlpha)));
+            Render2D.text(TEXT_FONT, visibleName, nameX, textY, TEXT_SIZE,
+                    ColorUtil.rgba(255, 255, 255, Math.round(238.0F * rowAlpha)));
+            renderTimer(row.time, timerRightX, rowCenterY, row.timeSize, rowAlpha, row.secondsAnimation);
         }
     }
 
@@ -299,15 +272,18 @@ public final class Cooldowns extends HudPanel {
 
     private float timerWidth(String text, float size) {
         if (text == null || text.isBlank()) {
-            return Render2D.textWidth(TEXT_FONT, "**:**", size);
+            return Render2D.textWidth(TEXT_FONT, "88:88", size);
         }
-        int separator = text.lastIndexOf(':');
-        int seconds = parseTimerSeconds(text);
-        if (separator < 0 || seconds < 0) {
-            return Render2D.textWidth(TEXT_FONT, text, size);
+        StringBuilder stable = new StringBuilder(text.length());
+        for (int index = 0; index < text.length(); index++) {
+            char character = text.charAt(index);
+            stable.append(Character.isDigit(character) || character == '*' ? '8' : character);
         }
-        String minutesText = text.substring(0, separator);
-        return Render2D.textWidth(TEXT_FONT, minutesText + ":" + twoDigits(seconds), size);
+        return Render2D.textWidth(TEXT_FONT, stable.toString(), size);
+    }
+
+    private float timerBoxWidth(String text, float size) {
+        return timerWidth(text, size) + 7.0F;
     }
 
     private static float bodyHeight(int rowCount) {
@@ -317,21 +293,62 @@ public final class Cooldowns extends HudPanel {
                 + Math.max(0, rows - 1) * ROW_GAP;
     }
 
-    private void renderTimer(String text, float rightX, float y, float size, float alpha, SmoothAnimatedNumber secondsAnimation) {
-        int color = hudTextColor(Math.round(245.0F * alpha));
+    private void renderTimer(String text, float rightX, float centerY, float size, float alpha, SmoothAnimatedNumber secondsAnimation) {
+        int color = accentColor(250.0F * alpha);
+        float boxWidth = timerBoxWidth(text, size);
+        float boxLeftX = rightX - boxWidth;
+        Render2D.rect(boxLeftX, centerY - TIMER_BOX_HEIGHT * 0.5F, boxWidth, TIMER_BOX_HEIGHT, 2.0F,
+                accentBackgroundColor(112.0F * alpha));
         int separator = text == null ? -1 : text.lastIndexOf(':');
         int seconds = parseTimerSeconds(text);
         if (separator < 0 || seconds < 0 || secondsAnimation == null) {
             String value = text == null ? "**:**" : text;
-            Render2D.text(TEXT_FONT, value,
-                    rightX - Render2D.textWidth(TEXT_FONT, value, size), y, size, color);
+            Render2D.TextVisualBounds bounds = Render2D.textVisualBounds(TEXT_FONT, value, size);
+            float textWidth = Render2D.textWidth(TEXT_FONT, value, size);
+            float textX = bounds.empty()
+                    ? boxLeftX + (boxWidth - textWidth) * 0.5F
+                    : boxLeftX + boxWidth * 0.5F - (bounds.minX() + bounds.maxX()) * 0.5F;
+            float textY = bounds.empty() ? centerY - size * 0.5F : centerY - bounds.centerY();
+            Render2D.text(TEXT_FONT, value, textX, textY, size, color);
             return;
         }
 
         String prefix = text.substring(0, separator + 1);
         secondsAnimation.update(seconds);
+        String timerText = prefix + twoDigits(seconds);
+        Render2D.TextVisualBounds bounds = Render2D.textVisualBounds(TEXT_FONT, timerText, size);
         float timerWidth = secondsAnimation.timerWidth(prefix);
-        secondsAnimation.renderTimer(prefix, rightX - timerWidth, y, color);
+        float timerX = bounds.empty()
+                ? boxLeftX + (boxWidth - timerWidth) * 0.5F
+                : boxLeftX + boxWidth * 0.5F - (bounds.minX() + bounds.maxX()) * 0.5F;
+        float timerY = bounds.empty() ? centerY - size * 0.5F : centerY - bounds.centerY();
+        secondsAnimation.renderTimer(prefix, timerX, timerY, color);
+    }
+
+    private void renderHeaderIcon(String glyph, float rightX, float headerY, float alpha) {
+        float size = 6.0F;
+        float x = rightX - Render2D.textWidth(FontType.VIREX_WONDERFUL, glyph, size);
+        float y = headerY + (HEADER_HEIGHT - Render2D.textHeight(FontType.VIREX_WONDERFUL, glyph, size)) * 0.5F;
+        Render2D.text(FontType.VIREX_WONDERFUL, glyph, x, y, size,
+                accentColor(255.0F * alpha));
+    }
+
+    private void renderCooldownIcon(ItemStack stack, float x, float y, float alpha) {
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+        RenderItem.item(stack, x, y, ICON_SIZE, RenderItemOptions.noDecorations(alpha));
+    }
+
+    private static int accentColor(float alpha) {
+        Color color = Hud.getInstance() == null ? new Color(244, 176, 101) : Hud.getInstance().cooldownsColor();
+        return ColorUtil.rgba(color.getRed(), color.getGreen(), color.getBlue(), Math.round(color.getAlpha() * alpha / 255.0F));
+    }
+
+    private static int accentBackgroundColor(float alpha) {
+        Color color = Hud.getInstance() == null ? new Color(126, 72, 39) : Hud.getInstance().cooldownsColor();
+        return ColorUtil.rgba(Math.round(color.getRed() * 0.52F), Math.round(color.getGreen() * 0.52F),
+                Math.round(color.getBlue() * 0.52F), Math.round(color.getAlpha() * alpha / 255.0F));
     }
 
     private static int parseTimerSeconds(String text) {

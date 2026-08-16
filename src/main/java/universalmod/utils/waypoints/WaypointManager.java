@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 import universalmod.api.events.impl.DrawEvent;
+import universalmod.api.module.impl.render.Hud;
 import universalmod.utils.render.Render3D;
 import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.ui.Render2D;
@@ -274,9 +275,7 @@ public final class WaypointManager {
             case MANUAL -> ThemeColors.hudAccentColor(235);
         };
 
-        Render2D.blur(x, y, width, height, 4.0f, 10.0f, 1.0f, ThemeColors.hudBlurColor(ColorUtil.rgba(5, 5, 5, 125)));
-        Render2D.rect(x, y, width, height, 4.0f, ColorUtil.rgba(5, 5, 5, 88));
-        Render2D.outline(x, y, width, height, 4.0f, 0.75f, ColorUtil.rgba(255, 255, 255, 34));
+        Hud.renderHudBackground(x, y, width, height, 5.0f, 8.0f, 1.0f, ColorUtil.rgba(0, 0, 0, 238));
         float pinX = x + paddingX + iconSize * 0.5f;
         float pinY = y + height * 0.5f;
         Render2D.rect(pinX - iconSize * 0.32f, pinY - iconSize * 0.58f, iconSize * 0.64f, iconSize * 0.64f, iconSize * 0.22f, accent);

@@ -1,28 +1,15 @@
 package universalmod.utils.render.ui.font;
 
-import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
 
 public enum FontType {
     SEMIBOLD("semibold", "sf_medium", true),
     BOLD("bold", "sf_medium", true),
     DEFAULT("default", "sf_regular", true),
-    ONEST("onest", "onest_regular", true),
-    GT("gt", "gt_regular", true),
     DELTA_ICONS("delta_icons", "delta_icons", true),
-    ICONS("icons", "icons", true),
     GUI_ICONS("guiicons", "guiicons", true),
     ICONNEW("iconnew", "iconnew", true),
-    DIVINE("divine", "divine", true);
-
-    private static final Map<String, String> REGISTRY = new LinkedHashMap<>();
-
-    static {
-        for (FontType font : values()) {
-            REGISTRY.put(font.name, font.path);
-        }
-    }
+    VIREX_WONDERFUL("virex_wonderful", "virex_wonderful", true);
 
     private final String name;
     private final String path;
@@ -40,10 +27,6 @@ public enum FontType {
 
     public String path() {
         return path;
-    }
-
-    public static Map<String, String> registry() {
-        return REGISTRY;
     }
 
     public static String normalizeName(String name) {

@@ -14,7 +14,6 @@ import universalmod.utils.lang.LanguageManager;
 import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.ui.Render2D;
 import universalmod.utils.render.ui.font.FontType;
-import universalmod.utils.theme.ThemeColors;
 
 import java.io.Reader;
 import java.io.Writer;
@@ -141,31 +140,26 @@ public final class CurrentEventsPanel extends HudPanel {
             return;
         }
 
-        boolean split = ThemeColors.isHudSplit();
-        float panelHeight = calculatePanelHeight(displayCount, split);
+        float panelHeight = calculatePanelHeight(displayCount, false);
         size(PANEL_WIDTH, panelHeight);
 
         float x = drag.x();
         float y = drag.y();
-        float bodyY = y + TITLE_HEIGHT + (split ? PANEL_GAP : 0.0F);
-        float bodyHeight = Math.max(BODY_MIN_HEIGHT, panelHeight - TITLE_HEIGHT - (split ? PANEL_GAP : 0.0F));
+        float bodyY = y + TITLE_HEIGHT;
+        float bodyHeight = Math.max(BODY_MIN_HEIGHT, panelHeight - TITLE_HEIGHT);
         String translatedTitle = LanguageManager.translate(TITLE_TEXT);
         float titleY = y + (TITLE_HEIGHT - Render2D.textHeight(FontType.BOLD, translatedTitle, 8.0F)) * 0.5F;
         float gearY = y + (TITLE_HEIGHT - GEAR_SIZE) * 0.5F;
         float gearX = x + TAG_COLUMN_CENTER_X - GEAR_SIZE * 0.5F;
         int panelBackgroundColor = ColorUtil.rgba(10, 12, 16, Math.round(255.0F * alpha));
 
-        if (split) {
-            float headerPadding = 6.0F;
-            Hud.renderSplitHudHeader(x, y, PANEL_WIDTH, TITLE_HEIGHT, ThemeColors.splitHeaderRounding(), 4.0F, 0.55F, panelBackgroundColor);
-            Hud.renderHudBackground(x, bodyY, PANEL_WIDTH, bodyHeight, 4.0F, 4.0F, 0.55F, panelBackgroundColor);
-            Render2D.text(FontType.BOLD, translatedTitle, x + headerPadding, titleY, 8.0F, TITLE_COLOR);
-            Render2D.image(GEAR_TEXTURE, gearX, gearY, GEAR_SIZE, GEAR_SIZE, 0.0F, 0xFFFFFFFF);
-        } else {
-            Hud.renderHudBackground(x, y, PANEL_WIDTH, panelHeight, 4.0F, 4.0F, 0.55F, panelBackgroundColor);
-            Render2D.text(FontType.BOLD, translatedTitle, x + 3.0F, titleY, 8.0F, TITLE_COLOR);
-            Render2D.image(GEAR_TEXTURE, gearX, gearY, GEAR_SIZE, GEAR_SIZE, 0.0F, 0xFFFFFFFF);
-        }
+        Hud.renderHudBackground(x, y, PANEL_WIDTH, panelHeight, 5.0F, 4.0F, 0.55F, panelBackgroundColor);
+        Render2D.rect(x + 6.0F, y + 6.0F, 1.0F, 5.0F, 0.5F,
+                ColorUtil.rgba(228, 157, 91, Math.round(255.0F * alpha)));
+        Render2D.text(FontType.BOLD, translatedTitle, x + 11.0F, titleY, 7.0F, 0xFFFFFFFF);
+        Render2D.image(GEAR_TEXTURE, gearX, gearY, GEAR_SIZE, GEAR_SIZE, 0.0F, 0xFFFFFFFF);
+        Render2D.rect(x + 5.0F, bodyY - 0.5F, PANEL_WIDTH - 10.0F, 0.5F, 0.0F,
+                ColorUtil.rgba(255, 255, 255, Math.round(20.0F * alpha)));
 
         float rowY = bodyY + CONTENT_PADDING_TOP;
         if (visibleEvents.isEmpty()) {

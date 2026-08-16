@@ -12,7 +12,6 @@ import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.ui.Render2D;
 import universalmod.utils.render.ui.Render2DCoordinateSpace;
 import universalmod.utils.render.ui.font.FontType;
-import universalmod.utils.theme.HudStyleContext;
 import universalmod.utils.theme.HudStyleOverrides;
 import universalmod.utils.theme.ThemeColors;
 import org.lwjgl.glfw.GLFW;
@@ -46,10 +45,7 @@ public final class HudElementStyleMenu {
     };
 
     private final SmoothAnimation appearAnimation = new SmoothAnimation();
-    private final SmoothAnimation customAnimation = new SmoothAnimation();
-    private final SmoothAnimation presetDropdownAnimation = new SmoothAnimation();
-    private final SmoothAnimation designDropdownAnimation = new SmoothAnimation();
-    private final SmoothAnimation styleDropdownAnimation = new SmoothAnimation();
+    private final SmoothAnimation viewDropdownAnimation = new SmoothAnimation();
     private final SmoothAnimation sizeSliderAnimation = new SmoothAnimation();
     private final SmoothAnimation colorPickerAnimation = new SmoothAnimation();
 
@@ -92,10 +88,7 @@ public final class HudElementStyleMenu {
 
     private HudElementStyleMenu() {
         appearAnimation.set(0.0);
-        customAnimation.set(0.0);
-        presetDropdownAnimation.set(0.0);
-        designDropdownAnimation.set(0.0);
-        styleDropdownAnimation.set(0.0);
+        viewDropdownAnimation.set(0.0);
         sizeSliderAnimation.set(0.5);
         colorPickerAnimation.set(0.0);
     }
@@ -130,12 +123,8 @@ public final class HudElementStyleMenu {
         this.openColor = null;
         this.colorDragMode = 0;
 
-        boolean custom = HudStyleOverrides.PRESET_CUSTOM.equals(HudStyleOverrides.getInstance().getPreset(elementId));
         appearAnimation.set(0.0);
-        customAnimation.set(custom ? 1.0 : 0.0);
-        presetDropdownAnimation.set(0.0);
-        designDropdownAnimation.set(0.0);
-        styleDropdownAnimation.set(0.0);
+        viewDropdownAnimation.set(0.0);
         colorPickerAnimation.set(0.0);
         sizeSliderAnimation.set(sizeProgress());
         placedSide = requestedSide;
@@ -151,9 +140,7 @@ public final class HudElementStyleMenu {
         elementTitle = null;
         openDropdown = Dropdown.NONE;
         appearAnimation.set(0.0);
-        presetDropdownAnimation.set(0.0);
-        designDropdownAnimation.set(0.0);
-        styleDropdownAnimation.set(0.0);
+        viewDropdownAnimation.set(0.0);
         colorPickerAnimation.set(0.0);
         openColor = null;
         colorDragMode = 0;
@@ -172,12 +159,7 @@ public final class HudElementStyleMenu {
         if (!isOpen()) {
             return;
         }
-        HudStyleContext.push(elementId);
-        try {
-            renderScoped(graphics);
-        } finally {
-            HudStyleContext.clear();
-        }
+        renderScoped(graphics);
     }
 
     private void renderScoped(GuiGraphics graphics) {
@@ -201,44 +183,16 @@ public final class HudElementStyleMenu {
                 animatedLayout.y + 4.3F, 7.6F, alphaColor(0xFFF3F6FA, appear));
 
         float rowY = animatedLayout.y + HEADER_HEIGHT;
-        renderRow(animatedLayout, rowY, "Preset", HudStyleOverrides.getInstance().getPreset(elementId),
-                openDropdown == Dropdown.PRESET, appear);
-        rowY += ROW_HEIGHT;
+        if (isMusicPlayerHud()) {
+            renderRow(animatedLayout, rowY, "View", HudStyleOverrides.getInstance().getMusicPlayerView(elementId),
+                    openDropdown == Dropdown.VIEW, appear);
+            rowY += ROW_HEIGHT;
 
-        float presetDrop = dropdownProgress(Dropdown.PRESET);
-        if (presetDrop > 0.001F) {
-            renderOptions(graphics, animatedLayout, rowY, Dropdown.PRESET,
-                    new String[]{HudStyleOverrides.PRESET_DEFAULT, HudStyleOverrides.PRESET_CUSTOM}, presetDrop, appear);
-            rowY += optionAreaHeight(2) * presetDrop;
-        }
-
-        float custom = clamp01(customAnimation.get());
-        if (custom > 0.001F) {
-            float customAlpha = appear * custom;
-            float customSlide = (1.0F - custom) * 3.0F;
-
-            renderRow(animatedLayout, rowY - customSlide, "Design", HudStyleOverrides.getInstance().getDesign(elementId),
-                    openDropdown == Dropdown.DESIGN, customAlpha);
-            rowY += ROW_HEIGHT * custom;
-
-            float designDrop = dropdownProgress(Dropdown.DESIGN) * custom;
-            if (designDrop > 0.001F) {
-                String[] options = designOptions();
-                renderOptions(graphics, animatedLayout, rowY, Dropdown.DESIGN, options, designDrop, appear * custom);
-                rowY += optionAreaHeight(options.length) * designDrop;
-            }
-
-            if (hasStyleRow()) {
-                renderRow(animatedLayout, rowY - customSlide, "Style", HudStyleOverrides.getInstance().getStyle(elementId),
-                        openDropdown == Dropdown.STYLE, customAlpha);
-                rowY += ROW_HEIGHT * custom;
-
-                float styleDrop = dropdownProgress(Dropdown.STYLE) * custom;
-                if (styleDrop > 0.001F) {
-                    String[] options = styleOptions();
-                    renderOptions(graphics, animatedLayout, rowY, Dropdown.STYLE, options, styleDrop, appear * custom);
-                    rowY += optionAreaHeight(options.length) * styleDrop;
-                }
+            float viewDrop = dropdownProgress(Dropdown.VIEW);
+            if (viewDrop > 0.001F) {
+                String[] options = musicPlayerViewOptions();
+                renderOptions(graphics, animatedLayout, rowY, Dropdown.VIEW, options, viewDrop, appear);
+                rowY += optionAreaHeight(options.length) * viewDrop;
             }
         }
 
@@ -304,66 +258,25 @@ public final class HudElementStyleMenu {
         }
 
         float rowY = layout.y + HEADER_HEIGHT;
-        if (insideValue(layout, mx, my, rowY)) {
-            toggle(Dropdown.PRESET);
-            return true;
-        }
-        rowY += ROW_HEIGHT;
 
-        float presetDrop = dropdownProgress(Dropdown.PRESET);
-        if (presetDrop > 0.55F) {
-            int index = optionIndex(layout, mx, my, rowY, 2, presetDrop);
-            if (index >= 0) {
-                String preset = index == 0 ? HudStyleOverrides.PRESET_DEFAULT : HudStyleOverrides.PRESET_CUSTOM;
-                HudStyleOverrides.getInstance().setPreset(elementId, preset);
-                boolean custom = HudStyleOverrides.PRESET_CUSTOM.equals(preset);
-                customAnimation.run(custom ? 1.0 : 0.0, 0.18, Easings.CUBIC_OUT);
-                setDropdown(Dropdown.NONE);
+        if (isMusicPlayerHud()) {
+            if (insideValue(layout, mx, my, rowY)) {
+                toggle(Dropdown.VIEW);
                 return true;
             }
-        }
-        rowY += optionAreaHeight(2) * presetDrop;
+            rowY += ROW_HEIGHT;
 
-        boolean customSelected = HudStyleOverrides.PRESET_CUSTOM.equals(HudStyleOverrides.getInstance().getPreset(elementId));
-        float customProgress = clamp01(customAnimation.get());
-        if (customProgress > 0.001F) {
-            if (customSelected && customProgress > 0.55F && insideValue(layout, mx, my, rowY)) {
-                toggle(Dropdown.DESIGN);
-                return true;
-            }
-            rowY += ROW_HEIGHT * customProgress;
-
-            float designDrop = dropdownProgress(Dropdown.DESIGN) * customProgress;
-            if (customSelected && designDrop > 0.55F) {
-                String[] options = designOptions();
-                int index = optionIndex(layout, mx, my, rowY, options.length, designDrop);
+            float viewDrop = dropdownProgress(Dropdown.VIEW);
+            if (viewDrop > 0.55F) {
+                String[] options = musicPlayerViewOptions();
+                int index = optionIndex(layout, mx, my, rowY, options.length, viewDrop);
                 if (index >= 0) {
-                    HudStyleOverrides.getInstance().setDesign(elementId, options[index]);
+                    HudStyleOverrides.getInstance().setMusicPlayerView(elementId, options[index]);
                     setDropdown(Dropdown.NONE);
                     return true;
                 }
             }
-            rowY += optionAreaHeight(designOptions().length) * designDrop;
-
-            if (hasStyleRow()) {
-                if (customSelected && customProgress > 0.55F && insideValue(layout, mx, my, rowY)) {
-                    toggle(Dropdown.STYLE);
-                    return true;
-                }
-                rowY += ROW_HEIGHT * customProgress;
-
-                float styleDrop = dropdownProgress(Dropdown.STYLE) * customProgress;
-                if (customSelected && styleDrop > 0.55F) {
-                    String[] options = styleOptions();
-                    int index = optionIndex(layout, mx, my, rowY, options.length, styleDrop);
-                    if (index >= 0) {
-                        HudStyleOverrides.getInstance().setStyle(elementId, options[index]);
-                        setDropdown(Dropdown.NONE);
-                        return true;
-                    }
-                }
-                rowY += optionAreaHeight(styleOptions().length) * styleDrop;
-            }
+            rowY += optionAreaHeight(musicPlayerViewOptions().length) * viewDrop;
         }
 
         if (hasSizeRow()) {
@@ -779,10 +692,7 @@ public final class HudElementStyleMenu {
 
     private void updateAnimations() {
         appearAnimation.update();
-        customAnimation.update();
-        presetDropdownAnimation.update();
-        designDropdownAnimation.update();
-        styleDropdownAnimation.update();
+        viewDropdownAnimation.update();
         colorPickerAnimation.update();
     }
 
@@ -793,49 +703,23 @@ public final class HudElementStyleMenu {
 
     private void setDropdown(Dropdown dropdown) {
         openDropdown = dropdown == null ? Dropdown.NONE : dropdown;
-        presetDropdownAnimation.run(openDropdown == Dropdown.PRESET ? 1.0 : 0.0, 0.16, Easings.CUBIC_OUT, true);
-        designDropdownAnimation.run(openDropdown == Dropdown.DESIGN ? 1.0 : 0.0, 0.16, Easings.CUBIC_OUT, true);
-        styleDropdownAnimation.run(openDropdown == Dropdown.STYLE ? 1.0 : 0.0, 0.16, Easings.CUBIC_OUT, true);
+        viewDropdownAnimation.run(openDropdown == Dropdown.VIEW ? 1.0 : 0.0, 0.16, Easings.CUBIC_OUT, true);
     }
 
     private float dropdownProgress(Dropdown dropdown) {
         return switch (dropdown) {
-            case PRESET -> clamp01(presetDropdownAnimation.get());
-            case DESIGN -> clamp01(designDropdownAnimation.get());
-            case STYLE -> clamp01(styleDropdownAnimation.get());
+            case VIEW -> clamp01(viewDropdownAnimation.get());
             default -> 0.0F;
         };
     }
 
-    private String[] designOptions() {
-        return new String[]{HudStyleOverrides.DESIGN_DEFAULT, HudStyleOverrides.DESIGN_LIQUID_GLASS, HudStyleOverrides.DESIGN_DARK};
+    private static String[] musicPlayerViewOptions() {
+        return new String[]{HudStyleOverrides.MUSIC_PLAYER_VIEW_1, HudStyleOverrides.MUSIC_PLAYER_VIEW_2};
     }
 
-    private String[] styleOptions() {
-        if (isEventElement()) {
-            return new String[]{HudStyleOverrides.STYLE_SPLIT, HudStyleOverrides.STYLE_MERGE};
-        }
-        return new String[]{
-                HudStyleOverrides.STYLE_WITHOUT_NAME,
-                HudStyleOverrides.STYLE_SPLIT,
-                HudStyleOverrides.STYLE_MERGE
-        };
-    }
-
-    private boolean hasStyleRow() {
-        return !isInventoryHud() && !isLyricsHud() && !isKeystrokesHud() && !isMusicPlayerHud();
-    }
 
     private boolean hasSizeRow() {
         return true;
-    }
-
-    private boolean isInventoryHud() {
-        return "hud.inventory".equalsIgnoreCase(elementId) || "inventory".equalsIgnoreCase(elementId);
-    }
-
-    private boolean isLyricsHud() {
-        return "hud.lyrics".equalsIgnoreCase(elementId) || "lyrics".equalsIgnoreCase(elementId);
     }
 
     private boolean isKeystrokesHud() {
@@ -846,16 +730,10 @@ public final class HudElementStyleMenu {
         return "hud.music_player".equalsIgnoreCase(elementId) || "music_player".equalsIgnoreCase(elementId);
     }
 
-    private boolean isEventElement() {
-        return "hud.event".equalsIgnoreCase(elementId) || "event".equalsIgnoreCase(elementId);
-    }
-
     private String selectedValue(Dropdown dropdown) {
         HudStyleOverrides overrides = HudStyleOverrides.getInstance();
         return switch (dropdown) {
-            case PRESET -> overrides.getPreset(elementId);
-            case DESIGN -> overrides.getDesign(elementId);
-            case STYLE -> overrides.getStyle(elementId);
+            case VIEW -> overrides.getMusicPlayerView(elementId);
             default -> "";
         };
     }
@@ -932,8 +810,11 @@ public final class HudElementStyleMenu {
     }
 
     private float layoutHeight() {
-        float height = HEADER_HEIGHT + ROW_HEIGHT + PADDING;
-        height += optionAreaHeight(2) * dropdownProgress(Dropdown.PRESET);
+        float height = HEADER_HEIGHT + PADDING;
+        if (isMusicPlayerHud()) {
+            height += ROW_HEIGHT;
+            height += optionAreaHeight(musicPlayerViewOptions().length) * dropdownProgress(Dropdown.VIEW);
+        }
         if (hasSizeRow()) {
             height += SIZE_ROW_HEIGHT;
         }
@@ -941,16 +822,7 @@ public final class HudElementStyleMenu {
             height += COLOR_ROW_HEIGHT * 3.0F;
         }
 
-        float custom = clamp01(customAnimation.get());
-        if (custom > 0.001F) {
-            height += ROW_HEIGHT * custom;
-            height += optionAreaHeight(designOptions().length) * dropdownProgress(Dropdown.DESIGN) * custom;
-            if (hasStyleRow()) {
-                height += ROW_HEIGHT * custom;
-                height += optionAreaHeight(styleOptions().length) * dropdownProgress(Dropdown.STYLE) * custom;
-            }
-        }
-        return Math.max(HEADER_HEIGHT + ROW_HEIGHT + PADDING, height);
+        return Math.max(HEADER_HEIGHT + PADDING, height);
     }
 
     private static int alphaColor(int color, float alphaMultiplier) {
@@ -976,7 +848,7 @@ public final class HudElementStyleMenu {
     }
 
     private enum Dropdown {
-        NONE, PRESET, DESIGN, STYLE
+        NONE, VIEW
     }
 
     private record Layout(float x, float y, float height) {

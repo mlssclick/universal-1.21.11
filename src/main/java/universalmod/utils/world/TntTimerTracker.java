@@ -3,6 +3,10 @@ package universalmod.utils.world;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -13,10 +17,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+/** Tracks TNT from the moment it is visible and continues its fuse using a monotonic clock. */
 public final class TntTimerTracker {
-    private static final int MAX_DISPLAY = 20;
+    private static final int MAX_DISPLAY = 5;
+    private static final long TICK_MILLIS = 50L;
     private static final Map<UUID, TrackedTnt> TRACKED = new LinkedHashMap<>();
     private static final List<Entry> VIEW = new ArrayList<>();
+    private static long lastEntityScanTick = Long.MIN_VALUE;
 
     private TntTimerTracker() {
     }
@@ -27,33 +34,90 @@ public final class TntTimerTracker {
             return;
         }
 
-        long now = minecraft.level.getGameTime();
+        long nowNanos = System.nanoTime();
+        long gameTick = minecraft.level.getGameTime();
+        if (gameTick != lastEntityScanTick) {
+            lastEntityScanTick = gameTick;
+            scanVisibleTnt(minecraft, nowNanos);
+        }
+        rebuildView(minecraft, nowNanos);
+    }
+
+    public static List<Entry> getEntries() {
+        return List.copyOf(VIEW);
+    }
+
+    public static void reset() {
+        TRACKED.clear();
+        VIEW.clear();
+        lastEntityScanTick = Long.MIN_VALUE;
+    }
+
+    private static void scanVisibleTnt(Minecraft minecraft, long nowNanos) {
         for (Entity entity : minecraft.level.entitiesForRendering()) {
-            if (entity instanceof PrimedTnt tnt && minecraft.player.hasLineOfSight(tnt)) {
-                TRACKED.put(tnt.getUUID(), new TrackedTnt(
-                        tnt.getUUID(),
+            if (!(entity instanceof PrimedTnt tnt) || !hasVisibleRay(minecraft, tnt)) {
+                continue;
+            }
+
+            TRACKED.compute(tnt.getUUID(), (id, tracked) -> {
+                if (tracked == null) {
+                    return new TrackedTnt(
+                            id,
+                            tnt.getName().getString(),
+                            tnt.position().x,
+                            tnt.position().y,
+                            tnt.position().z,
+                            tnt.getFuse(),
+                            nowNanos
+                    );
+                }
+                tracked.refresh(
                         tnt.getName().getString(),
                         tnt.position().x,
                         tnt.position().y,
                         tnt.position().z,
                         tnt.getFuse(),
-                        now
-                ));
-            }
+                        nowNanos
+                );
+                return tracked;
+            });
         }
+    }
 
+    private static boolean hasVisibleRay(Minecraft minecraft, PrimedTnt tnt) {
+        Vec3 eye = minecraft.player.getEyePosition();
+        AABB bounds = tnt.getBoundingBox().deflate(0.01D);
+        double centerX = (bounds.minX + bounds.maxX) * 0.5D;
+        double centerZ = (bounds.minZ + bounds.maxZ) * 0.5D;
+        double topY = bounds.maxY;
+        return reaches(minecraft, eye, new Vec3(centerX, (bounds.minY + bounds.maxY) * 0.5D, centerZ))
+                || reaches(minecraft, eye, new Vec3(centerX, topY, centerZ))
+                || reaches(minecraft, eye, new Vec3(bounds.minX, topY, bounds.minZ))
+                || reaches(minecraft, eye, new Vec3(bounds.minX, topY, bounds.maxZ))
+                || reaches(minecraft, eye, new Vec3(bounds.maxX, topY, bounds.minZ))
+                || reaches(minecraft, eye, new Vec3(bounds.maxX, topY, bounds.maxZ));
+    }
+
+    private static boolean reaches(Minecraft minecraft, Vec3 start, Vec3 end) {
+        HitResult hit = minecraft.level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE, minecraft.player));
+        return hit.getType() == HitResult.Type.MISS;
+    }
+
+    private static void rebuildView(Minecraft minecraft, long nowNanos) {
         VIEW.clear();
         Iterator<Map.Entry<UUID, TrackedTnt>> iterator = TRACKED.entrySet().iterator();
         while (iterator.hasNext()) {
             TrackedTnt tracked = iterator.next().getValue();
-            int remainingFuse = tracked.remainingFuse(now);
-            if (remainingFuse <= 0) {
+            long remainingMillis = tracked.remainingMillis(nowNanos);
+            if (remainingMillis <= 0L) {
                 iterator.remove();
                 continue;
             }
-            tracked.currentFuse = remainingFuse;
+
+            int remainingFuse = (int) Math.max(1L, (remainingMillis + TICK_MILLIS - 1L) / TICK_MILLIS);
             double distance = minecraft.player.distanceToSqr(tracked.x, tracked.y, tracked.z);
-            VIEW.add(new Entry(tracked.id, tracked.name, remainingFuse, Math.sqrt(distance)));
+            VIEW.add(new Entry(tracked.id, tracked.name, remainingFuse, remainingMillis, Math.sqrt(distance)));
         }
 
         if (VIEW.size() > 1) {
@@ -64,49 +128,49 @@ public final class TntTimerTracker {
         }
     }
 
-    public static List<Entry> getEntries() {
-        return List.copyOf(VIEW);
-    }
-
-    public static void reset() {
-        TRACKED.clear();
-        VIEW.clear();
-    }
-
     private static final class TrackedTnt {
         private final UUID id;
-        private final String name;
-        private final double x;
-        private final double y;
-        private final double z;
-        private final int initialFuse;
-        private final long seenAt;
-        private int currentFuse;
+        private String name;
+        private double x;
+        private double y;
+        private double z;
+        private long remainingMillisAtSample;
+        private long sampleNanos;
 
-        private TrackedTnt(UUID id, String name, double x, double y, double z, int initialFuse, long seenAt) {
+        private TrackedTnt(UUID id, String name, double x, double y, double z, int fuseTicks, long nowNanos) {
             this.id = id;
             this.name = name;
             this.x = x;
             this.y = y;
             this.z = z;
-            this.initialFuse = initialFuse;
-            this.currentFuse = initialFuse;
-            this.seenAt = seenAt;
+            this.remainingMillisAtSample = Math.max(0L, fuseTicks) * TICK_MILLIS;
+            this.sampleNanos = nowNanos;
         }
 
-        private int remainingFuse(long now) {
-            return initialFuse - (int) Math.max(0L, now - seenAt);
+        private void refresh(String name, double x, double y, double z, int fuseTicks, long nowNanos) {
+            long observedMillis = Math.max(0L, fuseTicks) * TICK_MILLIS;
+            long runningMillis = remainingMillis(nowNanos);
+            this.name = name;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.remainingMillisAtSample = Math.min(runningMillis, observedMillis);
+            this.sampleNanos = nowNanos;
+        }
+
+        private long remainingMillis(long nowNanos) {
+            long elapsedMillis = Math.max(0L, (nowNanos - sampleNanos) / 1_000_000L);
+            return Math.max(0L, remainingMillisAtSample - elapsedMillis);
         }
     }
 
-    public record Entry(UUID id, String name, int remainingFuse, double distance) {
+    public record Entry(UUID id, String name, int remainingFuse, long remainingMillis, double distance) {
         public String label() {
-            long remainingMillis = Math.max(0L, remainingFuse) * 50L;
             long seconds = remainingMillis / 1000L;
             long millis = remainingMillis % 1000L;
             return name + " | "
                     + String.format(Locale.US, "%.1f", distance) + "m | "
-                    + String.format(Locale.US, "%d.%03d", seconds, Math.max(0L, Math.min(999L, millis)));
+                    + String.format(Locale.US, "%d.%03d", seconds, millis);
         }
     }
 }

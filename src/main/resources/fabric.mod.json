@@ -1,29 +1,26 @@
 {
-	"schemaVersion": 1,
-	"id": "universalmod",
-	"version": "${version}",
-	"name": "UniversalMod",
-	"description": "Hz the best",
-	"authors": [
-		"UniversalMod"
-	],
-	"license": "CC0-1.0",
-	"environment": "client",
-	"entrypoints": {
-		"main": [
-          "universalmod.Engine"
-		],
-		"client": [
-          "universalmod.Engine"
-		]
-	},
-	"mixins": [
-		"universalmod.mixins.json"
-	],
-	"depends": {
-		"fabricloader": ">=0.19.2",
-		"minecraft": "${minecraft_dependency}",
-		"java": ">=21",
-		"fabric-api": "*"
-	}
+  "schemaVersion": 1,
+  "id": "universalmod",
+  "version": "${version}",
+  "name": "UniversalMod",
+  "description": "Hz the best",
+  "authors": [
+    "UniversalMod"
+  ],
+  "license": "CC0-1.0",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "universalmod.Engine"
+    ]
+  },
+  "mixins": [
+    "universalmod.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": "${minecraft_dependency}",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
 }

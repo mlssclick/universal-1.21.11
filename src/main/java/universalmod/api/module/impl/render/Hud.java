@@ -29,8 +29,6 @@ import universalmod.utils.render.animation.SmoothAnimation;
 import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.item.RenderItem;
 import universalmod.utils.theme.ThemeColors;
-import universalmod.utils.theme.HudStyleContext;
-import universalmod.utils.theme.ThemeRender;
 import universalmod.utils.render.ui.Render2D;
 import universalmod.utils.render.ui.Render2DCoordinateSpace;
 import universalmod.utils.render.ui.blur.BuiltBlur;
@@ -42,7 +40,6 @@ import java.awt.Color;
 import java.util.List;
 
 public class Hud extends Module {
-    private static final float NO_BLUR_RECT_ALPHA_SCALE = 200.0F / 255.0F;
     private static final String EDIT_HINT = "\u041f\u041a\u041c \u0434\u043b\u044f \u0440\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f";
 
     private static final String BOSSBAR_ELEMENT = "Bossbar";
@@ -72,14 +69,6 @@ public class Hud extends Module {
 
     private final MultiModeSetting elements = register(new MultiModeSetting("Elements", "HUD elements to render.",
             ELEMENTS, DEFAULT_ELEMENTS));
-    private final ModeSetting potionLevelFormat = register(new ModeSetting(
-            "Potion Format",
-            "How potion effect levels are shown in the Potions HUD.",
-            "Roman",
-            "Roman",
-            "Number"
-    ));
-
     private final BooleanSetting keystrokesKeys = register(new BooleanSetting(
             "Keys", "Show W, A, S and D in the Keystrokes HUD.", true));
     private final BooleanSetting keystrokesMouseButtons = register(new BooleanSetting(
@@ -96,6 +85,10 @@ public class Hud extends Module {
             "Keystrokes Letter Color", "Color of the letters in the Keystrokes HUD.", new Color(255, 255, 255, 255)));
     private final NumberSetting keystrokesPressedAlpha = register(new NumberSetting(
             "Keystrokes Pressed Alpha", "Opacity of the pressed key color.", 100.0, 0.0, 100.0, 1.0));
+    private final ColorSetting potionsColor = register(new ColorSetting(
+            "Potions Color", "Accent color for the Potions HUD.", new Color(244, 176, 101, 255)));
+    private final ColorSetting cooldownsColor = register(new ColorSetting(
+            "Cooldowns Color", "Accent color for the Cooldowns HUD.", new Color(244, 176, 101, 255)));
 
     private final BooleanSetting useCustomBossbarSettings = register(new BooleanSetting(
             "Use Custom Bossbar Settings",
@@ -141,7 +134,6 @@ public class Hud extends Module {
         elements.setSelected("Event", true);
         elements.setSelected(BOSSBAR_ELEMENT, false);
 
-        potionLevelFormat.visibleWhen(() -> elements.isSelected("Potions"));
         keystrokesKeys.visibleWhen(this::isKeystrokesSelected);
         keystrokesMouseButtons.visibleWhen(this::isKeystrokesSelected);
         keystrokesSpace.visibleWhen(this::isKeystrokesSelected);
@@ -150,6 +142,8 @@ public class Hud extends Module {
         keystrokesPressedColor.visibleWhen(this::isKeystrokesSelected);
         keystrokesLetterColor.visibleWhen(this::isKeystrokesSelected);
         keystrokesPressedAlpha.visibleWhen(this::isKeystrokesSelected);
+        potionsColor.visibleWhen(() -> elements.isSelected("Potions"));
+        cooldownsColor.visibleWhen(() -> elements.isSelected("Cooldowns"));
         useCustomBossbarSettings.visibleWhen(this::isBossbarSelected);
         bossbarColor.visibleWhen(() -> isBossbarSelected() && useCustomBossbarSettings.getValue());
         bossbarTextColor.visibleWhen(() -> isBossbarSelected() && useCustomBossbarSettings.getValue());
@@ -216,8 +210,12 @@ public class Hud extends Module {
         return Math.max(0.0F, Math.min(1.0F, keystrokesPressedAlpha.getFloat() / 100.0F));
     }
 
-    public boolean useRomanPotionLevels() {
-        return potionLevelFormat.is("Roman");
+    public Color potionsColor() {
+        return potionsColor.getValue();
+    }
+
+    public Color cooldownsColor() {
+        return cooldownsColor.getValue();
     }
 
     public boolean useCustomBossbarSettings() {
@@ -246,84 +244,50 @@ public class Hud extends Module {
     }
 
     public static void renderHudBackground(float x, float y, float width, float height, float radius, float blurRadius, float smoothness, int color) {
-        int themedColor = ThemeColors.hudBlurColor(color);
-        ThemeRender.hudGlass(x, y, width, height, radius, ((themedColor >>> 24) & 0xFF) / 255.0f);
-
-        float defaultAlpha = ThemeRender.hudDefaultAlpha(1.0f);
-        if (defaultAlpha <= 0.0001f) {
+        float alpha = ((color >>> 24) & 0xFF) / 255.0f;
+        if (alpha <= 0.0001f || width <= 0.0f || height <= 0.0f) {
             return;
         }
-        themedColor = scaleAlpha(themedColor, defaultAlpha);
         if (isBlurEnabled()) {
-            Render2D.blur(x, y, width, height, radius, blurRadius, smoothness, themedColor);
-            return;
+            Render2D.blur(x, y, width, height, radius, Math.max(6.0f, blurRadius * 1.75f),
+                    Math.max(0.70f, smoothness), ThemeColors.hudBlurColor(ColorUtil.rgba(5, 7, 11, Math.round(212.0f * alpha))));
+        } else {
+            Render2D.rect(x, y, width, height, radius, ThemeColors.hudBlurColor(ColorUtil.rgba(5, 7, 11, Math.round(238.0f * alpha))));
         }
-        Render2D.rect(x, y, width, height, radius, noBlurRectColor(themedColor));
+        Render2D.hudChrome(x, y, width, height, radius, 0.78f * alpha, 0.88f, 0.90f);
     }
 
-    public static void renderSplitHudHeader(float x, float y, float width, float height, float radius, float blurRadius, float smoothness, int color) {
-        int themedColor = ThemeColors.hudBlurColor(color);
-        ThemeRender.hudGlass(x, y, width, height, radius, ((themedColor >>> 24) & 0xFF) / 255.0f);
-
-        float defaultAlpha = ThemeRender.hudDefaultAlpha(1.0f);
-        if (defaultAlpha <= 0.0001f) {
-            return;
-        }
-        themedColor = scaleAlpha(themedColor, defaultAlpha);
-        if (isBlurEnabled()) {
-            Render2D.blur(x, y, width, height, radius, blurRadius, smoothness, themedColor);
-            return;
-        }
-        Render2D.rect(x, y, width, height, radius, noBlurRectColor(themedColor));
+    public static void renderHudHeader(float x, float y, float width, float height, float radius, float blurRadius, float smoothness, int color) {
+        renderHudBackground(x, y, width, height, radius, blurRadius, smoothness, color);
     }
 
     public static void renderHudBackground(BuiltBlur blur) {
         if (blur == null) {
             return;
         }
-        BuiltBlur themedBlur = blur.withColor(ThemeColors.hudBlurColor(blur.color()));
-        ThemeRender.hudGlass(
-                themedBlur.x(), themedBlur.y(), themedBlur.width(), themedBlur.height(), themedBlur.radiusTopLeft(),
-                ((themedBlur.color() >>> 24) & 0xFF) / 255.0f);
-
-        float defaultAlpha = ThemeRender.hudDefaultAlpha(1.0f);
-        if (defaultAlpha <= 0.0001f) {
+        float alpha = ((blur.color() >>> 24) & 0xFF) / 255.0f;
+        if (alpha <= 0.0001f) {
             return;
         }
-        themedBlur = themedBlur.withColor(scaleAlpha(themedBlur.color(), defaultAlpha));
-        if (isBlurEnabled()) {
-            Render2D.blur(themedBlur);
-            return;
-        }
-        Render2D.rect(
-                themedBlur.x(),
-                themedBlur.y(),
-                themedBlur.width(),
-                themedBlur.height(),
-                themedBlur.radiusTopLeft(),
-                themedBlur.radiusTopRight(),
-                themedBlur.radiusBottomRight(),
-                themedBlur.radiusBottomLeft(),
-                noBlurRectColor(themedBlur.color())
+        BuiltBlur darkBlur = new BuiltBlur(
+                blur.x(), blur.y(), blur.width(), blur.height(),
+                blur.radiusTopLeft(), blur.radiusTopRight(), blur.radiusBottomRight(), blur.radiusBottomLeft(),
+                Math.max(0.70f, blur.smoothness()), Math.max(6.0f, blur.blurRadius() * 1.75f),
+                ThemeColors.hudBlurColor(ColorUtil.rgba(5, 7, 11, Math.round(212.0f * alpha)))
         );
+        if (isBlurEnabled()) {
+            Render2D.blur(darkBlur);
+        } else {
+            Render2D.rect(blur.x(), blur.y(), blur.width(), blur.height(), blur.radiusTopLeft(), blur.radiusTopRight(),
+                    blur.radiusBottomRight(), blur.radiusBottomLeft(), ThemeColors.hudBlurColor(ColorUtil.rgba(5, 7, 11, Math.round(238.0f * alpha))));
+        }
+        Render2D.hudChrome(blur.x(), blur.y(), blur.width(), blur.height(), blur.radiusTopLeft(), 0.78f * alpha, 0.88f, 0.90f);
     }
 
     public static void renderHudGlow(String texture, float x, float y, float width, float height, float radius, int color) {
         if (isGlowEnabled()) {
             Render2D.image(texture, x, y, width, height, radius, color);
         }
-    }
-
-    private static int scaleAlpha(int color, float multiplier) {
-        int alpha = (color >>> 24) & 0xFF;
-        int scaledAlpha = Math.round(alpha * Math.max(0.0f, Math.min(1.0f, multiplier)));
-        return (color & 0x00FFFFFF) | (scaledAlpha << 24);
-    }
-
-    private static int noBlurRectColor(int color) {
-        int alpha = (color >>> 24) & 0xFF;
-        int scaledAlpha = Math.round(alpha * NO_BLUR_RECT_ALPHA_SCALE);
-        return (color & 0x00FFFFFF) | (scaledAlpha << 24);
     }
 
     public void renderHudLayer(DrawEvent event) {
@@ -403,13 +367,8 @@ public class Hud extends Module {
                 continue;
             }
             if (element instanceof HudPanel panel) {
-                pushHudThemeScope(panel);
-                try {
-                    if (element.mouseClicked(event, doubled)) {
-                        return true;
-                    }
-                } finally {
-                    HudStyleContext.clear();
+                if (element.mouseClicked(event, doubled)) {
+                    return true;
                 }
             } else if (element.mouseClicked(event, doubled)) {
                 return true;
@@ -428,13 +387,8 @@ public class Hud extends Module {
                 continue;
             }
             if (element instanceof HudPanel panel) {
-                pushHudThemeScope(panel);
-                try {
-                    if (element.mouseScrolled(mouseX, mouseY, scrollY)) {
-                        return true;
-                    }
-                } finally {
-                    HudStyleContext.clear();
+                if (element.mouseScrolled(mouseX, mouseY, scrollY)) {
+                    return true;
                 }
             } else if (element.mouseScrolled(mouseX, mouseY, scrollY)) {
                 return true;
@@ -527,7 +481,6 @@ public class Hud extends Module {
             return;
         }
 
-        pushHudThemeScope(panel);
         float scale = useConfiguredScale ? panel.configuredHudScale() : 1.0F;
         panel.prepareHudScale(scale);
 
@@ -576,7 +529,6 @@ public class Hud extends Module {
             }
         } finally {
             panel.finishHudScale();
-            HudStyleContext.clear();
         }
     }
 
@@ -602,14 +554,6 @@ public class Hud extends Module {
                 centerX + dx * cos - dy * sin,
                 centerY + dx * sin + dy * cos
         );
-    }
-
-    private void pushHudThemeScope(HudPanel panel) {
-        if (panel == null) {
-            HudStyleContext.clear();
-            return;
-        }
-        HudStyleContext.push(panel.elementId());
     }
 
     private String elementName(HudElement element) {

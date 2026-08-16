@@ -1,24 +1,15 @@
 package universalmod;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.api.ModInitializer;
 import universalmod.api.module.impl.render.FireGlow;
 import universalmod.manager.Manager;
 import universalmod.utils.media.MusicTracker;
 import universalmod.utils.network.SaveKtAttackTracker;
-import universalmod.utils.render.ui.Render2D;
 import universalmod.utils.render.post.motionblur.MotionBlurRenderer;
-import universalmod.utils.sounds.SoundManager;
 
-public class Engine implements ModInitializer, ClientModInitializer {
+public class Engine implements ClientModInitializer {
 
     private final Manager manager = new Manager();
-
-    @Override
-    public void onInitialize() {
-        SoundManager.init();
-        Render2D.init();
-    }
 
     @Override
     public void onInitializeClient() {

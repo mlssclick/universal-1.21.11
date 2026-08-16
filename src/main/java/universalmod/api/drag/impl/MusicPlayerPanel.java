@@ -7,24 +7,27 @@ import universalmod.utils.render.animation.Easings;
 import universalmod.utils.render.animation.SmoothAnimation;
 import universalmod.utils.render.color.ColorUtil;
 import universalmod.utils.render.ui.Render2D;
-import universalmod.utils.render.ui.blur.BuiltBlur;
 import universalmod.utils.render.ui.font.FontType;
-import universalmod.utils.theme.ThemeColors;
+import universalmod.utils.theme.HudStyleOverrides;
 
 import java.awt.Color;
 import java.util.Locale;
 
-/** Music player layout ported from the supplied reference widget. */
+/** Compact album-art player used by the HUD. */
 public final class MusicPlayerPanel extends HudPanel {
-    // The reference widget uses a 210x85 layout. Render2D's fixed coordinate space is
-    // two physical pixels per unit, so a 0.5 base factor reproduces the reference's
-    // compact on-screen size at HUD Size = 100%.
+    // Values are authored in physical pixels, then converted to Render2D's fixed
+    // coordinate space. At HUD Size = 100% this is a 220x64 pixel widget.
     private static final float BASE_SCALE = 0.50F;
-    private static final float WIDTH = 210.0F * BASE_SCALE;
-    private static final float HEIGHT = 85.0F * BASE_SCALE;
-    private static final float COVER_SIZE = 44.0F * BASE_SCALE;
-    private static final float COVER_RADIUS = 6.0F * BASE_SCALE;
-    private static final float PANEL_RADIUS = 10.0F * BASE_SCALE;
+    private static final float WIDTH = 220.0F * BASE_SCALE;
+    private static final float HEIGHT = 64.0F * BASE_SCALE;
+    private static final float COVER_SIZE = 52.0F * BASE_SCALE;
+    private static final float COVER_RADIUS = 7.0F * BASE_SCALE;
+    private static final float PANEL_RADIUS = 12.0F * BASE_SCALE;
+    private static final float LEGACY_WIDTH = 210.0F * BASE_SCALE;
+    private static final float LEGACY_HEIGHT = 85.0F * BASE_SCALE;
+    private static final float LEGACY_COVER_SIZE = 44.0F * BASE_SCALE;
+    private static final float LEGACY_COVER_RADIUS = 6.0F * BASE_SCALE;
+    private static final float LEGACY_PANEL_RADIUS = 10.0F * BASE_SCALE;
     private static final String IMAGE_PREFIX = "music_player/";
     private static final String SOURCE_ICON_PREFIX = IMAGE_PREFIX + "source_icons/";
     private static final float MARQUEE_GAP = 18.0F;
@@ -54,13 +57,82 @@ public final class MusicPlayerPanel extends HudPanel {
     @Override
     public void render() {
         music.ensureStarted();
+        if (isLegacyView()) {
+            renderLegacy();
+            return;
+        }
+        renderCompact();
+    }
+
+    private void renderCompact() {
         sizeImmediate(WIDTH, HEIGHT);
 
         float x = drag.x();
         float y = drag.y();
         float mouseX = localMouseX(mouseX());
         float mouseY = localMouseY(mouseY());
-        float centerX = x + WIDTH / 2.0F;
+        float previousX = x + WIDTH - s(48.0F);
+        float playX = x + WIDTH - s(30.0F);
+        float nextX = x + WIDTH - s(12.0F);
+        float controlY = y + s(18.0F);
+        float hitSize = s(16.0F);
+
+        updateHover(previousHover, inside(mouseX, mouseY, previousX - hitSize * 0.5F, controlY - hitSize * 0.5F, hitSize, hitSize));
+        updateHover(playHover, inside(mouseX, mouseY, playX - hitSize * 0.5F, controlY - hitSize * 0.5F, hitSize, hitSize));
+        updateHover(nextHover, inside(mouseX, mouseY, nextX - hitSize * 0.5F, controlY - hitSize * 0.5F, hitSize, hitSize));
+        updatePress(previousPress);
+        updatePress(playPress);
+        updatePress(nextPress);
+
+        renderPanelBackground(x, y, WIDTH, HEIGHT, PANEL_RADIUS);
+
+        float coverX = x + s(6.0F);
+        float coverY = y + s(6.0F);
+        Identifier cover = music.getImage();
+        if (cover != null) {
+            Render2D.image(cover.toString(), coverX, coverY, COVER_SIZE, COVER_SIZE, COVER_RADIUS, ColorUtil.WHITE);
+        }
+
+        float textX = coverX + COVER_SIZE + s(10.0F);
+        float titleY = y + s(11.0F);
+        float textWidth = previousX - s(11.0F) - textX;
+        String title = safe(music.title());
+
+        Render2D.pushScissor(Render2D.currentGraphics(), textX, y + s(4.0F), textWidth, s(22.0F));
+        try {
+            renderMovingTitle(title, textX, titleY, s(15.0F), opaque(hudTextColor(255)), textWidth);
+        } finally {
+            Render2D.popScissor(Render2D.currentGraphics());
+        }
+
+        int previousColor = iconColor(previousHover.get());
+        int playColor = iconColor(playHover.get());
+        int nextColor = iconColor(nextHover.get());
+        playStateAnimation.run(music.isPlaying() ? 1.0D : 0.0D, 0.30D, Easings.EXPO_IN_OUT, true);
+        playStateAnimation.update();
+        renderControlIcon(IMAGE_PREFIX + "previous.png", previousX, controlY, previousColor, previousPress.get());
+        renderAnimatedPlayPause(playX, controlY, playColor, playPress.get(), playStateAnimation.get());
+        renderControlIcon(IMAGE_PREFIX + "next.png", nextX, controlY, nextColor, nextPress.get());
+
+        float barX = textX;
+        float barY = y + s(44.0F);
+        float barWidth = x + WIDTH - s(10.0F) - barX;
+        float barHeight = Math.max(1.0F, s(3.0F));
+        Render2D.rect(barX, barY, barWidth, barHeight, s(1.5F), ColorUtil.rgba(255, 255, 255, 54));
+        float fillWidth = barWidth * music.progress();
+        if (fillWidth > 0.25F) {
+            Render2D.rect(barX, barY, fillWidth, barHeight, s(1.5F), ColorUtil.rgba(192, 173, 255, 255));
+        }
+    }
+
+    private void renderLegacy() {
+        sizeImmediate(LEGACY_WIDTH, LEGACY_HEIGHT);
+
+        float x = drag.x();
+        float y = drag.y();
+        float mouseX = localMouseX(mouseX());
+        float mouseY = localMouseY(mouseY());
+        float centerX = x + LEGACY_WIDTH * 0.5F;
 
         updateHover(previousHover, inside(mouseX, mouseY, centerX - s(40.0F), y + s(55.0F), s(24.0F), s(20.0F)));
         updateHover(playHover, inside(mouseX, mouseY, centerX - s(12.0F), y + s(55.0F), s(24.0F), s(20.0F)));
@@ -69,29 +141,29 @@ public final class MusicPlayerPanel extends HudPanel {
         updatePress(playPress);
         updatePress(nextPress);
 
-        renderPanelBackground(x, y);
-        Render2D.outline(x, y, WIDTH, HEIGHT, PANEL_RADIUS, Math.max(0.5F, s(1.0F)), ColorUtil.rgba(76, 78, 88, 255));
-        Render2D.image(IMAGE_PREFIX + "stars.png", x, y, WIDTH, HEIGHT, PANEL_RADIUS, ColorUtil.WHITE);
+        renderPanelBackground(x, y, LEGACY_WIDTH, LEGACY_HEIGHT, LEGACY_PANEL_RADIUS);
+        Render2D.outline(x, y, LEGACY_WIDTH, LEGACY_HEIGHT, LEGACY_PANEL_RADIUS, Math.max(0.5F, s(1.0F)),
+                ColorUtil.rgba(76, 78, 88, 255));
+        Render2D.image(IMAGE_PREFIX + "stars.png", x, y, LEGACY_WIDTH, LEGACY_HEIGHT, LEGACY_PANEL_RADIUS, ColorUtil.WHITE);
 
         float coverX = x + s(12.0F);
         float coverY = y + s(12.0F);
         Identifier cover = music.getImage();
         if (cover != null) {
-            Render2D.image(cover.toString(), coverX, coverY, COVER_SIZE, COVER_SIZE, COVER_RADIUS, ColorUtil.WHITE);
+            Render2D.image(cover.toString(), coverX, coverY, LEGACY_COVER_SIZE, LEGACY_COVER_SIZE,
+                    LEGACY_COVER_RADIUS, ColorUtil.WHITE);
         }
-        renderSourceBadge(coverX, coverY);
+        renderSourceBadge(coverX, coverY, LEGACY_COVER_SIZE);
 
-        float textX = coverX + COVER_SIZE + s(10.0F);
+        float textX = coverX + LEGACY_COVER_SIZE + s(10.0F);
         float titleY = coverY + s(3.0F);
         float artistY = coverY + s(20.0F);
-        float textWidth = (x + WIDTH - s(12.0F)) - textX;
+        float textWidth = (x + LEGACY_WIDTH - s(12.0F)) - textX;
         String title = safe(music.title()).toLowerCase(Locale.ROOT);
         String artist = safe(music.author()).toUpperCase(Locale.ROOT);
-
-        Render2D.pushScissor(Render2D.currentGraphics(), textX, y, textWidth, HEIGHT);
+        Render2D.pushScissor(Render2D.currentGraphics(), textX, y, textWidth, LEGACY_HEIGHT);
         try {
             renderMovingTitle(title, textX, titleY, s(14.0F), opaque(hudTextColor(255)), textWidth);
-            // Match the reference widget exactly: 0xFF888899.
             Render2D.text(FontType.SEMIBOLD, artist, textX, artistY, s(11.0F), ColorUtil.rgba(136, 136, 153, 255));
         } finally {
             Render2D.popScissor(Render2D.currentGraphics());
@@ -104,7 +176,7 @@ public final class MusicPlayerPanel extends HudPanel {
         int timeColor = ColorUtil.rgba(221, 221, 221, 255);
         Render2D.text(FontType.BOLD, position, x + s(12.0F), rowY, s(11.0F), timeColor);
         float durationWidth = Render2D.textWidth(FontType.BOLD, duration, s(11.0F));
-        Render2D.text(FontType.BOLD, duration, x + WIDTH - s(12.0F) - durationWidth, rowY, s(11.0F), timeColor);
+        Render2D.text(FontType.BOLD, duration, x + LEGACY_WIDTH - s(12.0F) - durationWidth, rowY, s(11.0F), timeColor);
 
         int previousColor = iconColor(previousHover.get());
         int playColor = iconColor(playHover.get());
@@ -117,15 +189,12 @@ public final class MusicPlayerPanel extends HudPanel {
 
         float barX = x + s(12.0F);
         float barY = y + s(77.0F);
-        float barWidth = WIDTH - s(24.0F);
+        float barWidth = LEGACY_WIDTH - s(24.0F);
         float barHeight = Math.max(1.0F, s(3.0F));
-        // Reference track: 0x25FFFFFF. Only the filled progress remains fully opaque
-        // and uses the average artwork color as requested.
         Render2D.rect(barX, barY, barWidth, barHeight, s(1.25F), ColorUtil.rgba(255, 255, 255, 0x25));
         float fillWidth = barWidth * music.progress();
         if (fillWidth > 0.25F) {
-            int bright = brightProgressColor(music.getMediaColor());
-            Render2D.rect(barX, barY, fillWidth, barHeight, s(1.25F), bright);
+            Render2D.rect(barX, barY, fillWidth, barHeight, s(1.25F), brightProgressColor(music.getMediaColor()));
         }
     }
 
@@ -133,6 +202,9 @@ public final class MusicPlayerPanel extends HudPanel {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
         if (event == null || event.button() != 0) {
             return false;
+        }
+        if (isLegacyView()) {
+            return mouseClickedLegacy(event);
         }
 
         // ChatScreenMixin already converts mouse coordinates into Render2D's fixed
@@ -142,7 +214,36 @@ public final class MusicPlayerPanel extends HudPanel {
         float mouseY = localMouseY((float) event.y());
         float x = drag.x();
         float y = drag.y();
-        float centerX = x + WIDTH / 2.0F;
+        float previousX = x + WIDTH - s(48.0F);
+        float playX = x + WIDTH - s(30.0F);
+        float nextX = x + WIDTH - s(12.0F);
+        float controlY = y + s(18.0F);
+        float hitSize = s(16.0F);
+
+        if (inside(mouseX, mouseY, previousX - hitSize * 0.5F, controlY - hitSize * 0.5F, hitSize, hitSize)) {
+            previousPress.set(1.0D);
+            music.previousTrack();
+            return true;
+        }
+        if (inside(mouseX, mouseY, playX - hitSize * 0.5F, controlY - hitSize * 0.5F, hitSize, hitSize)) {
+            playPress.set(1.0D);
+            music.togglePlay();
+            return true;
+        }
+        if (inside(mouseX, mouseY, nextX - hitSize * 0.5F, controlY - hitSize * 0.5F, hitSize, hitSize)) {
+            nextPress.set(1.0D);
+            music.nextTrack();
+            return true;
+        }
+        return false;
+    }
+
+    private boolean mouseClickedLegacy(MouseButtonEvent event) {
+        float mouseX = localMouseX((float) event.x());
+        float mouseY = localMouseY((float) event.y());
+        float x = drag.x();
+        float y = drag.y();
+        float centerX = x + LEGACY_WIDTH * 0.5F;
 
         if (inside(mouseX, mouseY, centerX - s(40.0F), y + s(55.0F), s(24.0F), s(20.0F))) {
             previousPress.set(1.0D);
@@ -162,25 +263,9 @@ public final class MusicPlayerPanel extends HudPanel {
         return false;
     }
 
-    private void renderPanelBackground(float x, float y) {
-        if (ThemeColors.isHudDarkDesignEnabled()) {
-            // Music Player intentionally ignores the global Dark opacity control: in
-            // Dark design this widget must remain fully opaque for readability.
-            Render2D.darkPanel(x, y, WIDTH, HEIGHT, PANEL_RADIUS, 1.0F,
-                    ThemeColors.darkGradientStrength(), false, opaque(ThemeColors.darkColor()));
-            return;
-        }
-
-        if (ThemeColors.isHudLiquidGlassDesignEnabled()) {
-            HudRenderCompat.background(new BuiltBlur(x, y, WIDTH, HEIGHT, PANEL_RADIUS, 0.62F, s(4.0F))
-                    .withColor(ColorUtil.rgba(8, 9, 13, 255)));
-            return;
-        }
-
-        // Reference/default design: opaque panel so artwork, controls and text never
-        // disappear against a bright world background.
-        int base = opaque(ThemeColors.hudBlurColor(ColorUtil.rgba(8, 9, 13, 255)));
-        Render2D.rect(x, y, WIDTH, HEIGHT, PANEL_RADIUS, base);
+    private void renderPanelBackground(float x, float y, float width, float height, float radius) {
+        HudRenderCompat.background(x, y, width, height, radius, s(5.0F), 0.82F,
+                ColorUtil.rgba(0, 0, 0, 255));
     }
 
     private static void renderMovingTitle(String text, float x, float y, float size, int color, float width) {
@@ -251,7 +336,7 @@ public final class MusicPlayerPanel extends HudPanel {
         }
     }
 
-    private void renderSourceBadge(float coverX, float coverY) {
+    private void renderSourceBadge(float coverX, float coverY, float coverSize) {
         String icon = resolveSourceIcon();
         if (icon.isBlank()) {
             return;
@@ -261,7 +346,7 @@ public final class MusicPlayerPanel extends HudPanel {
         // Center it on the right edge: half of the badge overlaps the artwork and
         // half sits outside it, while remaining at the top-right corner.
         float badgeSize = s(16.0F);
-        float badgeX = coverX + COVER_SIZE - badgeSize * 0.5F;
+        float badgeX = coverX + coverSize - badgeSize * 0.5F;
         float badgeY = coverY - badgeSize * 0.5F;
         float radius = s(3.5F);
         Render2D.rect(badgeX - s(0.75F), badgeY - s(0.75F), badgeSize + s(1.5F), badgeSize + s(1.5F), radius,
@@ -377,7 +462,7 @@ public final class MusicPlayerPanel extends HudPanel {
     }
 
     private static void updateHover(SmoothAnimation animation, boolean hovered) {
-        animation.run(hovered ? 1.0D : 0.0D, 0.15D, Easings.LINEAR, true);
+        animation.run(hovered ? 1.0D : 0.0D, 0.08D, Easings.LINEAR, true);
         animation.update();
     }
 
@@ -387,10 +472,9 @@ public final class MusicPlayerPanel extends HudPanel {
     }
 
     private static int iconColor(float hover) {
-        // Reference textures are already pure white; tinting them to 225 made the
-        // controls look grey. Keep them fully white and let hover/press animations
-        // provide the interaction feedback instead of reducing contrast.
-        return ColorUtil.rgba(255, 255, 255, 255);
+        // Resting controls are neutral grey; hover reaches pure white quickly.
+        float value = 156.0F + clamp(hover, 0.0F, 1.0F) * 99.0F;
+        return ColorUtil.rgba(Math.round(value), Math.round(value), Math.round(value), 255);
     }
 
     private static int brightProgressColor(int color) {
@@ -405,6 +489,12 @@ public final class MusicPlayerPanel extends HudPanel {
 
     private static float s(float value) {
         return value * BASE_SCALE;
+    }
+
+    private boolean isLegacyView() {
+        return HudStyleOverrides.MUSIC_PLAYER_VIEW_1.equals(
+                HudStyleOverrides.getInstance().getMusicPlayerView(elementId())
+        );
     }
 
     private static int opaque(int color) {
